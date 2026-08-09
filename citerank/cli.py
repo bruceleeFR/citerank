@@ -219,6 +219,37 @@ def _cmd_compare(args) -> int:
     return 0
 
 
+def _cmd_agents(args) -> int:
+    from . import agents
+    try:
+        rep = agents.analyze_file(args.logfile)
+    except FileNotFoundError:
+        print(f"  Log file not found: {args.logfile}", file=sys.stderr)
+        return 2
+    if args.json:
+        import json
+        print(json.dumps(rep.to_dict(), ensure_ascii=False, indent=2))
+        return 0
+    print("\n  CiteRank · AI crawler activity")
+    print(f"  {'─' * 46}")
+    print(f"  {rep.ai_hits} AI-crawler hit(s) over {rep.total_requests} requests  [MEASURED]\n")
+    if rep.by_operator:
+        for op, n in rep.by_operator.most_common():
+            print(f"    {op:<24} {n:>5}")
+    else:
+        print("    No AI crawler seen in this log.")
+    if rep.by_path and rep.ai_hits:
+        print("\n  Most-crawled pages:")
+        for path, n in rep.by_path.most_common(5):
+            print(f"    {n:>4}×  {path[:52]}")
+    missing = rep.engines_missing
+    if missing:
+        print(f"\n  ⚠ Never crawled you: {', '.join(missing)}")
+        print("    These engines can't cite what they've never read.")
+    print()
+    return 0
+
+
 def _cmd_serve(args) -> int:
     from . import api
     print(f"  CiteRank API on http://{args.host}:{args.port}")
@@ -317,6 +348,11 @@ def main(argv=None) -> int:
     cmp = sub.add_parser("compare", help="Evolution between the first and last snapshot")
     cmp.add_argument("url")
     cmp.set_defaults(func=_cmd_compare)
+
+    ag = sub.add_parser("agents", help="AI-crawler activity from an access log (MEASURED)")
+    ag.add_argument("logfile", help="access log in Common/Combined format")
+    ag.add_argument("--json", action="store_true")
+    ag.set_defaults(func=_cmd_agents)
 
     sv = sub.add_parser("serve", help="Run the REST API (SaaS layer)")
     sv.add_argument("--host", default="127.0.0.1")

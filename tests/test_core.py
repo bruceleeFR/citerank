@@ -117,6 +117,25 @@ def test_compare_detects_regression():
     assert not d["gains"]
 
 
+def test_agents_detects_ai_crawlers():
+    """Agent analytics: real hits, MEASURED, with the missing-engine blind spot."""
+    from citerank.agents import analyze_lines
+    log = [
+        '1.2.3.4 - - [09/Aug/2026:10:00:00 +0000] "GET /pricing HTTP/1.1" 200 500 "-" "Mozilla/5.0 (compatible; GPTBot/1.1; +https://openai.com/gptbot)"',
+        '1.2.3.5 - - [09/Aug/2026:11:00:00 +0000] "GET / HTTP/1.1" 200 900 "-" "Mozilla/5.0 (compatible; ClaudeBot/1.0)"',
+        '9.9.9.9 - - [09/Aug/2026:11:05:00 +0000] "GET / HTTP/1.1" 200 900 "-" "Mozilla/5.0 (a normal human browser)"',
+        '1.2.3.6 - - [09/Aug/2026:12:00:00 +0000] "GET /pricing HTTP/1.1" 200 500 "-" "GPTBot/1.1"',
+    ]
+    rep = analyze_lines(log)
+    assert rep.total_requests == 4
+    assert rep.ai_hits == 3                        # two GPTBot + one ClaudeBot, human excluded
+    assert rep.by_bot["GPTBot"] == 2
+    assert rep.by_path["/pricing"] == 2
+    assert "OpenAI (ChatGPT)" in rep.engines_seen
+    # Perplexity, Google, Meta never came -> flagged as blind spots
+    assert "Perplexity" in rep.engines_missing
+
+
 if __name__ == "__main__":
     import sys
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
