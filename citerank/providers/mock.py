@@ -1,15 +1,14 @@
 """
-Fournisseur factice, déterministe.
+Deterministic mock provider.
 
-Il ne parle à aucun réseau : il fabrique une réponse reproductible à partir du
-hachage de (requête, marque). Deux usages, tous deux importants :
+It talks to no network: it builds a reproducible answer from the hash of
+(query, brand). Two uses, both important:
 
-  - les tests unitaires tournent sans clé et sans réseau (point 26) ;
-  - une démonstration du parcours complet est possible hors ligne, sans brûler
-    un centime d'API.
+  - unit tests run without a key and without network (point 26);
+  - a full-flow demonstration is possible offline, without burning a cent of API.
 
-Il ne doit JAMAIS servir à produire un vrai rapport de visibilité : sa nature
-factice est affichée partout où il apparaît.
+It must NEVER be used to produce a real visibility report: its fake nature is
+displayed everywhere it appears.
 """
 
 from __future__ import annotations
@@ -22,21 +21,21 @@ from .base import Provider
 
 class MockProvider(Provider):
     name = "mock"
-    env_key = ""  # toujours disponible, aucune clé requise
+    env_key = ""  # always available, no key required
 
-    def disponible(self) -> bool:
+    def available(self) -> bool:
         return True
 
-    async def interroger(self, query: str, *, marque: str, domaine: str,
-                         session=None) -> ProviderResult:
-        graine = int(hashlib.sha256(f"{query}|{marque}".encode()).hexdigest(), 16)
-        mentionnee = (graine % 10) < 6          # ~60 % du temps
-        recommande = mentionnee and (graine % 3) == 0
-        cite = mentionnee and (graine % 4) == 0
+    async def query(self, query: str, *, brand: str, domain: str,
+                    session=None) -> ProviderResult:
+        seed = int(hashlib.sha256(f"{query}|{brand}".encode()).hexdigest(), 16)
+        mentioned = (seed % 10) < 6          # ~60% of the time
+        recommended = mentioned and (seed % 3) == 0
+        cited = mentioned and (seed % 4) == 0
         return ProviderResult(
             provider=self.name, query=query,
-            brand_mentioned=mentionnee, brand_recommended=recommande,
-            domain_cited=cite, citation_url=domaine if cite else "",
-            position=(graine % 500) if mentionnee else None,
-            raw_excerpt="[réponse factice déterministe — ne reflète aucun moteur réel]",
+            brand_mentioned=mentioned, brand_recommended=recommended,
+            domain_cited=cited, citation_url=domain if cited else "",
+            position=(seed % 500) if mentioned else None,
+            raw_excerpt="[deterministic fake answer — reflects no real engine]",
         )

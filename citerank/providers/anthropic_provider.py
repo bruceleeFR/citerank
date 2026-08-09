@@ -1,12 +1,12 @@
 """
-Adaptateur Anthropic (Claude).
+Anthropic (Claude) adapter.
 
-Le deuxième vrai fournisseur : sans lui, le « consensus multi-fournisseurs »
-(point 13) n'aurait qu'une seule voix, ce qui n'est pas un consensus. Avec OpenAI
-et Anthropic, la constance entre moteurs devient mesurable.
+The second real provider: without it, the "multi-provider consensus" (point 13)
+would have a single voice, which is no consensus. With OpenAI and Anthropic,
+consistency across engines becomes measurable.
 
-Fonctionnel dès qu'ANTHROPIC_API_KEY est présent. Aucune clé journalisée. Ne lève
-jamais : toute erreur devient un résultat vide, pour ne pas casser le consensus.
+Works as soon as ANTHROPIC_API_KEY is present. No key is logged. Never raises:
+any error becomes an empty result, so it doesn't break the consensus.
 """
 
 from __future__ import annotations
@@ -17,8 +17,8 @@ from ..models import ProviderResult
 from .base import Provider
 
 _INSTRUCTION = (
-    "Réponds à la question comme un assistant grand public, en citant les "
-    "entreprises ou produits pertinents et leurs sites quand tu les connais."
+    "Answer the question like a consumer assistant, naming the relevant companies "
+    "or products and their websites when you know them."
 )
 
 
@@ -30,8 +30,8 @@ class AnthropicProvider(Provider):
         self.model = model or os.environ.get("ANTHROPIC_MODEL", "claude-3-5-haiku-latest")
         self.base = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
 
-    async def interroger(self, query: str, *, marque: str, domaine: str,
-                         session) -> ProviderResult:
+    async def query(self, query: str, *, brand: str, domain: str,
+                    session) -> ProviderResult:
         try:
             async with session.post(
                 f"{self.base}/v1/messages",
@@ -48,15 +48,15 @@ class AnthropicProvider(Provider):
                 },
             ) as r:
                 if r.status != 200:
-                    return self._vide(query, f"HTTP {r.status}")
+                    return self._empty(query, f"HTTP {r.status}")
                 data = await r.json()
-                blocs = data.get("content", [])
-                texte = "".join(b.get("text", "") for b in blocs if b.get("type") == "text")
+                blocks = data.get("content", [])
+                text = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
         except Exception as e:
-            return self._vide(query, str(e)[:80])
-        return self._analyser_reponse(texte, marque, domaine, query, self.name)
+            return self._empty(query, str(e)[:80])
+        return self._analyze_response(text, brand, domain, query, self.name)
 
-    def _vide(self, query: str, motif: str) -> ProviderResult:
+    def _empty(self, query: str, reason: str) -> ProviderResult:
         return ProviderResult(provider=self.name, query=query, brand_mentioned=False,
                               brand_recommended=False, domain_cited=False,
-                              raw_excerpt=f"[erreur {self.name}: {motif}]")
+                              raw_excerpt=f"[{self.name} error: {reason}]")

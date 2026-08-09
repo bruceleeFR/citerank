@@ -1,9 +1,9 @@
 """
-Analyseur technique : robots.txt, sitemap, llms.txt, accessibilité aux
-crawlers IA, en-têtes, canonique, langue.
+Technical analyzer: robots.txt, sitemap, llms.txt, AI-crawler access, headers,
+canonical, language.
 
-100 % local et déterministe. Aucun appel à un moteur IA. C'est la brique qui
-permet un audit gratuit et illimité (point 31) — la couche d'acquisition.
+100% local and deterministic. No AI-engine call. This is the brick that enables
+a free, unlimited audit (point 31) — the acquisition layer.
 """
 
 from __future__ import annotations
@@ -15,160 +15,161 @@ import aiohttp
 from ..crawl import Crawler
 from ..models import CrawledPage, Finding, Nature, Score, ScoreComponent, Severity, SiteContext
 
-# Robots IA à considérer explicitement. Bloquer GPTBot, c'est se rendre
-# invisible à ChatGPT ; c'est un choix légitime, mais qui doit être conscient.
-CRAWLERS_IA = ["GPTBot", "ChatGPT-User", "OAI-SearchBot", "ClaudeBot",
+# AI crawlers to consider explicitly. Blocking GPTBot means going invisible to
+# ChatGPT; it's a legitimate choice, but it must be a conscious one.
+AI_CRAWLERS = ["GPTBot", "ChatGPT-User", "OAI-SearchBot", "ClaudeBot",
                "Claude-Web", "PerplexityBot", "Google-Extended", "CCBot"]
 
 
-async def analyser(url: str, crawler: Crawler, session: aiohttp.ClientSession,
-                   page: CrawledPage) -> tuple[Score, list[Finding], SiteContext]:
+async def analyze(url: str, crawler: Crawler, session: aiohttp.ClientSession,
+                  page: CrawledPage) -> tuple[Score, list[Finding], SiteContext]:
     base = urlparse(page.final_url)
-    racine = f"{base.scheme}://{base.netloc}"
+    root = f"{base.scheme}://{base.netloc}"
 
-    robots = await crawler.texte_brut(racine + "/robots.txt", session)
-    llms = await crawler.texte_brut(racine + "/llms.txt", session)
-    sitemap = await crawler.texte_brut(racine + "/sitemap.xml", session)
+    robots = await crawler.fetch_text(root + "/robots.txt", session)
+    llms = await crawler.fetch_text(root + "/llms.txt", session)
+    sitemap = await crawler.fetch_text(root + "/sitemap.xml", session)
 
     findings: list[Finding] = []
     comps: list[ScoreComponent] = []
 
-    # -- Accès des crawlers IA (25 pts) ------------------------------------
-    bloques = _crawlers_bloques(robots)
-    if not bloques:
-        comps.append(ScoreComponent("ai_crawlers", "Crawlers IA autorisés", 25, 25,
-                                    Nature.MEASURED, "aucun robot IA bloqué"))
+    # -- AI-crawler access (25 pts) ----------------------------------------
+    blocked = _blocked_crawlers(robots)
+    if not blocked:
+        comps.append(ScoreComponent("ai_crawlers", "AI crawlers allowed", 25, 25,
+                                    Nature.MEASURED, "no AI bot blocked"))
     else:
-        perdu = min(25, 4 * len(bloques))
-        comps.append(ScoreComponent("ai_crawlers", "Crawlers IA autorisés",
-                                    25 - perdu, 25, Nature.MEASURED,
-                                    f"bloqués : {', '.join(bloques)}"))
+        lost = min(25, 4 * len(blocked))
+        comps.append(ScoreComponent("ai_crawlers", "AI crawlers allowed",
+                                    25 - lost, 25, Nature.MEASURED,
+                                    f"blocked: {', '.join(blocked)}"))
         findings.append(Finding(
-            id="ai-crawler-blocked", title="Des robots IA sont bloqués par robots.txt",
+            id="ai-crawler-blocked", title="AI crawlers blocked by robots.txt",
             severity=Severity.HIGH, nature=Nature.MEASURED, confidence=1.0,
-            category="crawlers", source=racine + "/robots.txt",
-            detail=f"Robots bloqués : {', '.join(bloques)}",
-            evidence=_extrait_robots(robots, bloques),
-            recommendation="Retirer ces agents du Disallow si la visibilité IA est recherchée.",
+            category="crawlers", source=root + "/robots.txt",
+            detail=f"Blocked bots: {', '.join(blocked)}",
+            evidence=_robots_excerpt(robots),
+            recommendation="Remove these agents from Disallow if AI visibility is wanted.",
         ))
 
     # -- Sitemap (15 pts) --------------------------------------------------
-    a_sitemap = bool(sitemap.strip()) and "<urlset" in sitemap or "<sitemapindex" in sitemap
-    comps.append(ScoreComponent("sitemap", "Sitemap XML", 15 if a_sitemap else 0, 15,
-                                Nature.MEASURED, "présent" if a_sitemap else "absent"))
-    if not a_sitemap:
+    has_sitemap = bool(sitemap.strip()) and "<urlset" in sitemap or "<sitemapindex" in sitemap
+    comps.append(ScoreComponent("sitemap", "XML sitemap", 15 if has_sitemap else 0, 15,
+                                Nature.MEASURED, "present" if has_sitemap else "absent"))
+    if not has_sitemap:
         findings.append(Finding(
-            id="sitemap-missing", title="Sitemap XML absent", severity=Severity.MEDIUM,
+            id="sitemap-missing", title="XML sitemap missing", severity=Severity.MEDIUM,
             nature=Nature.MEASURED, confidence=1.0, category="technical",
-            source=racine + "/sitemap.xml",
-            recommendation="Publier /sitemap.xml pour guider l'exploration.",
+            source=root + "/sitemap.xml",
+            recommendation="Publish /sitemap.xml to guide crawling.",
         ))
 
-    # -- llms.txt (15 pts) — standard émergent, bonus, pas obligation -------
-    a_llms = bool(llms.strip())
-    comps.append(ScoreComponent("llms_txt", "llms.txt", 15 if a_llms else 0, 15,
-                                Nature.MEASURED, "présent" if a_llms else "absent"))
-    if not a_llms:
+    # -- llms.txt (15 pts) — emerging standard, bonus, not a requirement ---
+    has_llms = bool(llms.strip())
+    comps.append(ScoreComponent("llms_txt", "llms.txt", 15 if has_llms else 0, 15,
+                                Nature.MEASURED, "present" if has_llms else "absent"))
+    if not has_llms:
         findings.append(Finding(
-            id="llmstxt-missing", title="llms.txt absent",
+            id="llmstxt-missing", title="llms.txt missing",
             severity=Severity.LOW, nature=Nature.RECOMMENDED, confidence=0.7,
-            category="crawlers", source=racine + "/llms.txt",
-            detail="Standard émergent qui expose aux moteurs IA une carte du contenu.",
-            recommendation="Générer un /llms.txt listant les pages de référence.",
+            category="crawlers", source=root + "/llms.txt",
+            detail="Emerging standard that exposes a content map to AI engines.",
+            recommendation="Generate a /llms.txt listing the reference pages.",
         ))
 
-    # -- HTTPS + en-têtes (15 pts) -----------------------------------------
-    est_https = base.scheme == "https"
+    # -- HTTPS + headers (15 pts) ------------------------------------------
+    is_https = base.scheme == "https"
     hsts = "strict-transport-security" in page.headers
-    pts = (10 if est_https else 0) + (5 if hsts else 0)
+    pts = (10 if is_https else 0) + (5 if hsts else 0)
     comps.append(ScoreComponent("transport", "HTTPS & HSTS", pts, 15, Nature.MEASURED,
-                                f"https={est_https}, hsts={hsts}"))
-    if not est_https:
+                                f"https={is_https}, hsts={hsts}"))
+    if not is_https:
         findings.append(Finding(
-            id="no-https", title="Site non servi en HTTPS", severity=Severity.CRITICAL,
+            id="no-https", title="Site not served over HTTPS", severity=Severity.CRITICAL,
             nature=Nature.MEASURED, confidence=1.0, category="technical",
-            source=page.final_url, recommendation="Servir tout le site en HTTPS."))
+            source=page.final_url, recommendation="Serve the whole site over HTTPS."))
 
-    # -- Balises de tête (15 pts) ------------------------------------------
+    # -- Head tags (15 pts) ------------------------------------------------
     pts_meta = 0
     if page.title:
         pts_meta += 6
     else:
-        findings.append(Finding("title-missing", "Balise <title> absente",
+        findings.append(Finding("title-missing", "<title> tag missing",
                                 Severity.HIGH, Nature.MEASURED, 1.0, "technical",
-                                page.final_url, recommendation="Ajouter un <title> descriptif."))
+                                page.final_url, recommendation="Add a descriptive <title>."))
     if page.meta_description:
         pts_meta += 5
     else:
-        findings.append(Finding("meta-desc-missing", "Meta description absente",
+        findings.append(Finding("meta-desc-missing", "Meta description missing",
                                 Severity.MEDIUM, Nature.MEASURED, 1.0, "technical",
-                                page.final_url, recommendation="Ajouter une meta description."))
+                                page.final_url, recommendation="Add a meta description."))
     if page.lang:
         pts_meta += 4
     else:
-        findings.append(Finding("lang-missing", "Attribut lang absent sur <html>",
+        findings.append(Finding("lang-missing", "lang attribute missing on <html>",
                                 Severity.LOW, Nature.MEASURED, 1.0, "technical",
                                 page.final_url,
-                                recommendation="Déclarer la langue (ex. <html lang=\"fr\">)."))
-    comps.append(ScoreComponent("head", "Balises de tête", pts_meta, 15, Nature.MEASURED))
+                                recommendation="Declare the language (e.g. <html lang=\"en\">)."))
+    comps.append(ScoreComponent("head", "Head tags", pts_meta, 15, Nature.MEASURED))
 
-    # -- Structure des titres (15 pts) -------------------------------------
+    # -- Heading structure (15 pts) ----------------------------------------
     n_h1 = len(page.h1)
     if n_h1 == 1:
-        pts_h1, det = 15, "un seul H1, idéal"
+        pts_h1, det = 15, "a single H1, ideal"
     elif n_h1 == 0:
-        pts_h1, det = 0, "aucun H1"
-        findings.append(Finding("h1-missing", "Aucun titre H1", Severity.MEDIUM,
+        pts_h1, det = 0, "no H1"
+        findings.append(Finding("h1-missing", "No H1 heading", Severity.MEDIUM,
                                 Nature.OBSERVED, 1.0, "content", page.final_url,
-                                recommendation="Ajouter un H1 unique et descriptif."))
+                                recommendation="Add a single, descriptive H1."))
     else:
-        pts_h1, det = 7, f"{n_h1} H1 (un seul recommandé)"
-        findings.append(Finding("h1-multiple", f"{n_h1} balises H1", Severity.LOW,
+        pts_h1, det = 7, f"{n_h1} H1s (a single one is recommended)"
+        findings.append(Finding("h1-multiple", f"{n_h1} H1 tags", Severity.LOW,
                                 Nature.OBSERVED, 1.0, "content", page.final_url,
-                                recommendation="Conserver un seul H1 par page."))
-    comps.append(ScoreComponent("headings", "Structure des titres", pts_h1, 15,
+                                recommendation="Keep a single H1 per page."))
+    comps.append(ScoreComponent("headings", "Heading structure", pts_h1, 15,
                                 Nature.OBSERVED, det))
 
     score = Score(
-        key="technical", label="SEO technique",
+        key="technical", label="Technical SEO",
         value=sum(c.points for c in comps),
         nature=Nature.MEASURED, confidence=1.0, components=comps,
-        methodology="Somme de composantes mesurées : accès crawlers IA, sitemap, "
-                    "llms.txt, transport, balises de tête, structure des titres.",
+        methodology="Sum of measured components: AI-crawler access, sitemap, "
+                    "llms.txt, transport, head tags, heading structure.",
     )
     ctx = SiteContext(url=page.final_url, domain=base.netloc, robots_txt=robots,
-                      llms_txt=llms, sitemap_present=a_sitemap)
+                      llms_txt=llms, sitemap_present=has_sitemap)
     return score, findings, ctx
 
 
-def _crawlers_bloques(robots: str) -> list[str]:
-    """Repère les agents IA sous un Disallow: / dans robots.txt."""
-    bloques, agent_courant = [], None
-    interdit_global = {}
-    for ligne in robots.splitlines():
-        l = ligne.strip()
-        if not l or l.startswith("#"):
+def _blocked_crawlers(robots: str) -> list[str]:
+    """Spot AI agents under a Disallow: / in robots.txt."""
+    blocked = []
+    disallowed = {}
+    current_agent = None
+    for line in robots.splitlines():
+        s = line.strip()
+        if not s or s.startswith("#"):
             continue
-        cle, _, val = l.partition(":")
-        cle, val = cle.strip().lower(), val.strip()
-        if cle == "user-agent":
-            agent_courant = val
-            interdit_global.setdefault(agent_courant, False)
-        elif cle == "disallow" and agent_courant is not None:
+        key, _, val = s.partition(":")
+        key, val = key.strip().lower(), val.strip()
+        if key == "user-agent":
+            current_agent = val
+            disallowed.setdefault(current_agent, False)
+        elif key == "disallow" and current_agent is not None:
             if val == "/":
-                interdit_global[agent_courant] = True
-    for agent, interdit in interdit_global.items():
-        if not interdit:
+                disallowed[current_agent] = True
+    for agent, banned in disallowed.items():
+        if not banned:
             continue
         if agent == "*":
-            bloques.extend(CRAWLERS_IA)  # * bloque tout, IA comprise
+            blocked.extend(AI_CRAWLERS)  # * blocks everything, AI included
         else:
-            for c in CRAWLERS_IA:
+            for c in AI_CRAWLERS:
                 if c.lower() == agent.lower():
-                    bloques.append(c)
-    return sorted(set(bloques))
+                    blocked.append(c)
+    return sorted(set(blocked))
 
 
-def _extrait_robots(robots: str, bloques: list[str]) -> str:
-    lignes = [l for l in robots.splitlines() if l.strip()][:12]
-    return "\n".join(lignes)
+def _robots_excerpt(robots: str) -> str:
+    lines = [line for line in robots.splitlines() if line.strip()][:12]
+    return "\n".join(lines)

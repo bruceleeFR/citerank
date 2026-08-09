@@ -1,7 +1,7 @@
 """
-Registre des fournisseurs. Les adaptateurs Gemini, Perplexity et OpenRouter
-suivent le même contrat que base.Provider ; OpenRouter fonctionne déjà via
-OpenAIProvider en pointant OPENAI_BASE_URL sur son endpoint.
+Provider registry. The Gemini, Perplexity and OpenRouter adapters follow the
+same contract as base.Provider; OpenRouter already works via OpenAIProvider by
+pointing OPENAI_BASE_URL at its endpoint.
 """
 
 from .anthropic_provider import AnthropicProvider
@@ -9,20 +9,20 @@ from .base import Provider
 from .mock import MockProvider
 from .openai_provider import OpenAIProvider
 
-# Gemini et Perplexity suivent le même contrat ; à ajouter quand une clé est
-# disponible pour les tester en réel. On n'enregistre jamais un stub qui
-# mentirait sur sa disponibilité.
+# Gemini and Perplexity follow the same contract; to be added when a key is
+# available to test them for real. We never register a stub that would lie about
+# its availability.
 _CLASSES = [OpenAIProvider, AnthropicProvider]
 
 
-def fournisseurs_disponibles() -> list[Provider]:
-    """Retourne les fournisseurs dont la clé est présente dans l'environnement."""
-    dispo = []
+def available_providers() -> list[Provider]:
+    """Return the providers whose key is present in the environment."""
+    available = []
     for cls in _CLASSES:
         p = cls()
-        if p.disponible():
-            dispo.append(p)
-    return dispo
+        if p.available():
+            available.append(p)
+    return available
 
 
 __all__ = [
@@ -30,5 +30,5 @@ __all__ = [
     "MockProvider",
     "OpenAIProvider",
     "Provider",
-    "fournisseurs_disponibles",
+    "available_providers",
 ]

@@ -1,34 +1,38 @@
-# Journal des versions
+# Changelog
 
-Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
+Format inspired by [Keep a Changelog](https://keepachangelog.com/).
 
-## [Non publié]
+## [Unreleased]
 
-### Ajouté
-- Adaptateur fournisseur **Anthropic** — le consensus de visibilité repose
-  désormais sur deux moteurs réels (OpenAI + Anthropic), pas un seul.
-- `docs/EDITIONS.md` : frontière figée entre l'édition open-source et l'édition
-  hébergée.
-- `SECURITY.md`, `CONTRIBUTING.md`, intégration continue GitHub Actions.
+### Changed
+- Full English pass across the codebase: docs, comments, docstrings, identifiers
+  and user-facing output. English is the working language of the project.
+
+### Added
+- **Anthropic** provider adapter — visibility consensus now rests on two real
+  engines (OpenAI + Anthropic), not one.
+- **REST API** (`citerank serve`): `/api/audit`, `/api/competitors`,
+  `/api/report`. The engine serves HTTP without rewriting anything.
+- `docs/EDITIONS.md`: frozen boundary between the open-source and hosted editions.
+- `SECURITY.md`, `CONTRIBUTING.md`, GitHub Actions CI.
 
 ## [0.1.0]
 
-Première fondation — refonte indépendante inspirée de `geo-seo-claude` (MIT).
+First foundation — independent rewrite inspired by `geo-seo-claude` (MIT).
 
-### Ajouté
-- **Moteur Python découplé de l'interface** : CLI, skill, API et SaaS ne sont que
-  des peaux sur `citerank/`.
-- **Readiness** locale et déterministe : technique (robots, sitemap, llms.txt,
-  crawlers IA, transport, balises), données structurées (entité vs
-  transactionnel, sameAs), citabilité **sémantique** (remplace la règle
-  « 134-167 mots » de l'amont).
-- **Intelligence concurrentielle** : comparaison de Readiness et explication
-  « pourquoi ils passent devant », adossée aux seuls écarts mesurés.
-- **Share of Voice** entre marques, par consensus de fournisseurs.
-- **Remédiation** (`fix`) : génère JSON-LD, llms.txt, meta — sans jamais fabriquer
-  de fait.
-- **Rapport HTML** autonome et partageable, thème clair/sombre, marque blanche.
-- **Monitoring** : mode projet `.geo/`, instantanés datés, `compare` avec
-  détection de régression.
-- Étiquetage systématique de la nature des données (mesuré / observé / déduit /
-  recommandé). Validation d'URL anti-SSRF. 10 tests hors réseau.
+### Added
+- **Interface-independent Python engine**: CLI, skill, API and SaaS are just
+  skins over `citerank/`.
+- **Readiness**, local and deterministic: technical (robots, sitemap, llms.txt,
+  AI crawlers, transport, head tags), structured data (entity vs transactional,
+  sameAs), **semantic** citability (replaces the upstream's "134–167 words" rule).
+- **Competitive intelligence**: readiness comparison and a "why they win"
+  explanation, backed only by measured gaps.
+- **Share of voice** across brands, via provider consensus.
+- **Remediation** (`fix`): generates JSON-LD, llms.txt, meta — never fabricating a
+  fact.
+- **Standalone HTML report**, shareable, light/dark theme, white-label.
+- **Monitoring**: `.geo/` project mode, dated snapshots, `compare` with regression
+  detection.
+- Systematic labeling of data nature (measured / observed / inferred /
+  recommended). Anti-SSRF URL validation. Offline tests.

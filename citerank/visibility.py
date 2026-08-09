@@ -1,81 +1,80 @@
 """
-Moteur de Visibilité IA — mesure si une marque APPARAÎT réellement dans les
-réponses des moteurs IA (concept B du cahier des charges, distinct de la
-Readiness). C'est la couche coûteuse : chaque requête = des appels LLM payants.
+AI Visibility engine — measures whether a brand ACTUALLY appears in AI-engine
+answers (concept B of the spec, distinct from Readiness). This is the costly
+layer: each query = paid LLM calls.
 
-Deux garde-fous d'honnêteté, qui sont un argument de crédibilité (points 13, 30) :
+Two honesty safeguards, which are a credibility argument (points 13, 30):
 
-  - Consensus multi-fournisseurs et multi-exécutions : une réponse unique d'un
-    LLM n'est pas un fait. On répète, on croise, on rapporte la constance.
-  - La confiance est explicite. Une marque citée 5 fois sur 10 est un doute, pas
-    un score. On l'affiche « MEDIUM », on ne le lisse pas en « 50 % de visibilité ».
+  - Multi-provider, multi-run consensus: a single LLM answer is not a fact. We
+    repeat, we cross-check, we report the consistency.
+  - Confidence is explicit. A brand cited 5 times out of 10 is a doubt, not a
+    score. We display it "MEDIUM", we don't smooth it into "50% visibility".
 
-Sans clé de fournisseur, le moteur n'invente rien : il retourne un résultat vide
-en le disant. Avec le MockProvider, on démontre le parcours hors ligne.
+Without a provider key, the engine invents nothing: it returns an empty result
+and says so. With the MockProvider, it demonstrates the flow offline.
 """
 
 from __future__ import annotations
 
-from .crawl import nouvelle_session
+from .crawl import new_session
 from .models import ProviderResult, VisibilityResult
-from .providers import Provider, fournisseurs_disponibles
+from .providers import Provider, available_providers
 
 
-async def mesurer(queries: list[str], *, marque: str, domaine: str,
+async def measure(queries: list[str], *, brand: str, domain: str,
                   providers: list[Provider] | None = None,
                   runs: int = 1) -> list[VisibilityResult]:
     """
-    Exécute chaque requête sur chaque fournisseur `runs` fois. Retourne un
-    VisibilityResult par requête, portant tous les passages individuels.
+    Run each query on each provider `runs` times. Returns one VisibilityResult
+    per query, carrying all the individual runs.
     """
-    provs = providers if providers is not None else fournisseurs_disponibles()
-    resultats: list[VisibilityResult] = []
+    provs = providers if providers is not None else available_providers()
+    results: list[VisibilityResult] = []
     if not provs:
-        # Rien à interroger : on le dit franchement plutôt que de rendre des zéros
-        # qui se liraient comme « marque invisible ».
+        # Nothing to query: say so plainly rather than return zeros that would
+        # read as "brand invisible".
         return [VisibilityResult(query=q, runs=[]) for q in queries]
 
-    async with nouvelle_session() as session:
+    async with new_session() as session:
         for q in queries:
             vr = VisibilityResult(query=q, runs=[])
             for p in provs:
                 for _ in range(runs):
-                    res: ProviderResult = await p.interroger(
-                        q, marque=marque, domaine=domaine, session=session)
+                    res: ProviderResult = await p.query(
+                        q, brand=brand, domain=domain, session=session)
                     vr.runs.append(res)
-            resultats.append(vr)
-    return resultats
+            results.append(vr)
+    return results
 
 
-def score_visibilite(resultats: list[VisibilityResult]) -> dict:
+def visibility_score(results: list[VisibilityResult]) -> dict:
     """
-    Agrège les résultats en un score de visibilité et sa confiance. Retourne un
-    dict typé (jamais un blob Markdown), pour rester exploitable par n'importe
-    quelle interface.
+    Aggregate results into a visibility score and its confidence. Returns a typed
+    dict (never a Markdown blob), so it stays usable by any interface.
     """
-    if not resultats or all(not r.runs for r in resultats):
-        return {"mesuré": False,
-                "raison": "aucun fournisseur IA disponible (clé absente)",
+    if not results or all(not r.runs for r in results):
+        return {"measured": False,
+                "reason": "no AI provider available (key missing)",
                 "score": None}
 
-    taux_mention = sum(r.mention_rate for r in resultats) / len(resultats)
-    taux_reco = sum(r.recommendation_rate for r in resultats) / len(resultats)
-    taux_cite = sum(r.citation_rate for r in resultats) / len(resultats)
+    mention_rate = sum(r.mention_rate for r in results) / len(results)
+    reco_rate = sum(r.recommendation_rate for r in results) / len(results)
+    cite_rate = sum(r.citation_rate for r in results) / len(results)
 
-    # Le score de visibilité privilégie la recommandation (apparaître EN BIEN)
-    # sur la simple mention, et valorise la citation du domaine.
-    score = (taux_mention * 40 + taux_reco * 40 + taux_cite * 20)
+    # The visibility score favors recommendation (appearing FAVORABLY) over a
+    # plain mention, and values domain citation.
+    score = (mention_rate * 40 + reco_rate * 40 + cite_rate * 20)
 
-    factices = any(any(x.provider == "mock" for x in r.runs) for r in resultats)
+    fake = any(any(x.provider == "mock" for x in r.runs) for r in results)
     return {
-        "mesuré": not factices,
+        "measured": not fake,
         "score": round(score, 1),
-        "taux_mention": round(taux_mention * 100, 1),
-        "taux_recommandation": round(taux_reco * 100, 1),
-        "taux_citation": round(taux_cite * 100, 1),
-        "requêtes": len(resultats),
-        "avertissement": ("Résultats FACTICES (MockProvider) — ne reflètent aucun "
-                          "moteur réel." if factices else
-                          "Échantillon : dépend des requêtes testées et de la "
-                          "variabilité des moteurs. Ce n'est pas une garantie de rang."),
+        "mention_rate": round(mention_rate * 100, 1),
+        "recommendation_rate": round(reco_rate * 100, 1),
+        "citation_rate": round(cite_rate * 100, 1),
+        "queries": len(results),
+        "warning": ("FAKE results (MockProvider) — reflect no real engine."
+                    if fake else
+                    "Sample: depends on the queries tested and engine variability. "
+                    "This is not a ranking guarantee."),
     }

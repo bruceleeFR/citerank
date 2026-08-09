@@ -1,14 +1,13 @@
 """
-Orchestrateur du moteur.
+Engine orchestrator.
 
-C'est LE point d'entrée du cœur, indépendant de toute interface (point 37). Le
-skill Claude Code, la CLI, une future API REST ou le SaaS Lamarca appelleront
-tous `audit()` / `readiness_score()` — ils ne réimplémentent rien, ils
-habillent. La logique métier ne vit jamais dans un fichier Markdown de skill.
+This is THE entry point of the core, independent of any interface (point 37). The
+Claude Code skill, the CLI, a future REST API and the Lamarca SaaS all call
+`audit()` / `readiness_score()` — they reimplement nothing, they wrap. Business
+logic never lives in a skill Markdown file.
 
-Le crawl est fait une seule fois et partagé (point 23). Les analyseurs locaux
-sont déterministes et sans clé API : un audit de Readiness tourne hors ligne,
-gratuitement, sur n'importe quelle URL.
+The crawl happens once and is shared (point 23). The local analyzers are
+deterministic and keyless: a Readiness audit runs offline, for free, on any URL.
 """
 
 from __future__ import annotations
@@ -16,71 +15,71 @@ from __future__ import annotations
 from urllib.parse import urlparse
 
 from .analyzers import citability, schema_ld, technical
-from .crawl import Crawler, nouvelle_session, valider_url
+from .crawl import Crawler, new_session, validate_url
 from .models import Nature, Score, ScoreComponent, SiteAudit, now_iso
 
 
-async def audit(url: str, *, autoriser_local: bool = False) -> SiteAudit:
+async def audit(url: str, *, allow_local: bool = False) -> SiteAudit:
     """
-    Audit de Readiness complet, 100 % local. Ne lance AUCUN moteur IA — c'est la
-    couche gratuite. La Visibility (payante, coûteuse) est un appel séparé.
+    Full Readiness audit, 100% local. Runs NO AI engine — this is the free
+    layer. Visibility (paid, costly) is a separate call.
     """
-    url = valider_url(url, autoriser_local)
+    url = validate_url(url, allow_local)
     domain = urlparse(url).netloc
-    audit = SiteAudit(url=url, domain=domain, started_at=now_iso())
+    result = SiteAudit(url=url, domain=domain, started_at=now_iso())
 
-    crawler = Crawler(autoriser_local=autoriser_local)
-    async with nouvelle_session() as session:
+    crawler = Crawler(allow_local=allow_local)
+    async with new_session() as session:
         page = await crawler.get(url, session)
 
         if not page.ok:
-            audit.finished_at = now_iso()
+            result.finished_at = now_iso()
             from .models import Finding, Severity
-            audit.findings.append(Finding(
-                id="fetch-failed", title="Page inaccessible",
+            result.findings.append(Finding(
+                id="fetch-failed", title="Page unreachable",
                 severity=Severity.CRITICAL, nature=Nature.MEASURED, confidence=1.0,
                 category="technical", source=url,
                 detail=page.error or f"HTTP {page.status}",
-                recommendation="Vérifier que l'URL est publique et répond en 200."))
-            return audit
+                recommendation="Check that the URL is public and returns 200."))
+            return result
 
-        s_tech, f_tech, ctx = await technical.analyser(url, crawler, session, page)
-        s_schema, f_schema = schema_ld.analyser(page)
-        s_cite, f_cite = citability.analyser(page)
+        s_tech, f_tech, ctx = await technical.analyze(url, crawler, session, page)
+        s_schema, f_schema = schema_ld.analyze(page)
+        s_cite, f_cite = citability.analyze(page)
 
-    audit.context = ctx
-    audit.scores.extend([s_tech, s_schema, s_cite])
-    audit.findings.extend([*f_tech, *f_schema, *f_cite])
+    result.context = ctx
+    result.scores.extend([s_tech, s_schema, s_cite])
+    result.findings.extend([*f_tech, *f_schema, *f_cite])
 
-    # Le score de READINESS est un composite explicite des trois axes locaux.
-    # On le nomme et on le sépare de la Visibility : un site parfaitement prêt
-    # n'est pas forcément cité (distinction A/B du cahier des charges, point 1).
+    # The READINESS score is an explicit composite of the three local axes. We
+    # name it and separate it from Visibility: a perfectly prepared site is not
+    # necessarily cited (the spec's A/B distinction, point 1).
     readiness = _composite_readiness(s_tech, s_schema, s_cite)
-    audit.scores.insert(0, readiness)
+    result.scores.insert(0, readiness)
 
-    audit.finished_at = now_iso()
-    return audit
+    result.finished_at = now_iso()
+    return result
 
 
 def _composite_readiness(s_tech: Score, s_schema: Score, s_cite: Score) -> Score:
-    poids = {"technical": 0.45, "schema": 0.30, "citability": 0.25}
+    weights = {"technical": 0.45, "schema": 0.30, "citability": 0.25}
     comps = [
-        ScoreComponent(s.key, s.label, s.value * poids[s.key], poids[s.key] * 100,
-                       s.nature, f"{s.value:.0f}/100 pondéré {int(poids[s.key]*100)}%")
+        ScoreComponent(s.key, s.label, s.value * weights[s.key], weights[s.key] * 100,
+                       s.nature, f"{s.value:.0f}/100 weighted {int(weights[s.key]*100)}%")
         for s in (s_tech, s_schema, s_cite)
     ]
-    valeur = sum(c.points for c in comps)
+    value = sum(c.points for c in comps)
     return Score(
-        key="readiness", label="Préparation IA (Readiness)",
-        value=valeur, nature=Nature.MEASURED, confidence=0.9, components=comps,
-        methodology="Composite pondéré : technique 45 %, données structurées 30 %, "
-                    "citabilité 25 %. Mesure la PRÉPARATION du site, distincte de sa "
-                    "visibilité réelle dans les réponses IA.",
+        key="readiness", label="AI Readiness",
+        value=value, nature=Nature.MEASURED, confidence=0.9, components=comps,
+        methodology="Weighted composite: technical 45%, structured data 30%, "
+                    "citability 25%. Measures the site's PREPARATION, distinct "
+                    "from its actual visibility in AI answers.",
     )
 
 
-async def readiness_score(url: str, *, autoriser_local: bool = False) -> float:
-    """Raccourci : la note de Readiness seule."""
-    a = await audit(url, autoriser_local=autoriser_local)
+async def readiness_score(url: str, *, allow_local: bool = False) -> float:
+    """Shortcut: the Readiness score alone."""
+    a = await audit(url, allow_local=allow_local)
     s = a.score("readiness")
     return s.value if s else 0.0

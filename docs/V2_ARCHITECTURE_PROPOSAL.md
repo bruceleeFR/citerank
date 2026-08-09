@@ -1,86 +1,95 @@
-# Proposition d'architecture V2
+# V2 Architecture Proposal
 
-## Le constat sur l'amont
+## The finding on the upstream
 
-`geo-seo-claude` (9,3k étoiles, MIT) est un **skill Claude Code**. Sa logique
-d'analyse vit dans une douzaine de fichiers `SKILL.md` qui orchestrent quelques
-scripts Python (`fetch_page.py`, `citability_scorer.py`, `brand_scanner.py`).
-Conséquences :
+`geo-seo-claude` (9.3k stars, MIT) is a **Claude Code skill**. Its analysis logic
+lives in a dozen `SKILL.md` files that orchestrate a few Python scripts
+(`fetch_page.py`, `citability_scorer.py`, `brand_scanner.py`). Consequences:
 
-- **Le produit EST l'interface.** On ne peut pas en faire une API, un SaaS ou une
-  brique Jarvis sans tout réécrire : la valeur est prisonnière du format skill.
-- **La citabilité est une règle de comptage** (« 134-167 mots »), érigée en seuil
-  universel par le README lui-même.
-- **Pas de séparation** entre préparation, visibilité réelle et part de voix : un
-  seul « GEO Score » agrège des choses de natures différentes.
-- **Pas d'étiquetage** de la nature des données : une déduction et une mesure se
-  ressemblent dans le rapport.
+- **The product IS the interface.** You can't turn it into an API, a SaaS or a
+  Jarvis brick without rewriting everything: the value is trapped in the skill
+  format.
+- **Citability is a word-count rule** ("134–167 words"), elevated into a universal
+  threshold by the README itself.
+- **No separation** between readiness, real visibility and share of voice: a
+  single "GEO Score" aggregates things of different natures.
+- **No labeling** of data nature: an inference and a measurement look alike in the
+  report.
 
-## Le principe directeur (cahier des charges, point 37)
+## The guiding principle (point 37)
 
-> Claude Code doit être **une** interface du moteur, pas le moteur.
+> Claude Code must be **one** interface to the engine, not the engine.
 
 ```
-        ┌─ Skill Claude Code
-        ├─ CLI                  ← livré
-GEO ────├─ API REST             ← roadmap
+        ┌─ Claude Code skill
+        ├─ CLI                  ← shipped
+GEO ────├─ REST API             ← shipped
 ENGINE  ├─ Jarvis
         ├─ SaaS Lamarca
         └─ Client Dashboard
 ```
 
-L'open-source sur GitHub sert d'acquisition ; la version hébergée devient le SaaS
-payant. La frontière gratuit/payant tombe exactement sur la frontière
-Readiness/Visibility, qui est aussi la frontière local/coûteux : les trois se
-superposent, le modèle économique est donc porté par l'architecture elle-même.
+The open-source repo on GitHub is acquisition; the hosted version becomes the
+paid SaaS. The free/paid line falls exactly on the Readiness/Visibility boundary,
+which is also the local/expensive boundary: the three overlap, so the business
+model is carried by the architecture itself.
 
-## Arbre livré (Phase 1)
+## Shipped tree
 
 ```
 citerank/
-  models.py          Types (Finding, Score, CrawledPage, SiteAudit, …) — fin des blobs Markdown internes
-  crawl.py           Crawl normalisé, partagé, mis en cache + validation anti-SSRF
-  engine.py          Orchestrateur — LE point d'entrée du cœur
-  scoring            (dans engine + analyzers) multi-score transparent
+  models.py          Types (Finding, Score, CrawledPage, SiteAudit, …) — end of internal Markdown blobs
+  crawl.py           Normalized, shared, cached crawl + anti-SSRF validation
+  engine.py          Orchestrator — THE core entry point
   analyzers/
-    technical.py     robots, sitemap, llms.txt, crawlers IA, HTTPS, balises
-    schema_ld.py     JSON-LD, entité vs transactionnel, sameAs
-    citability.py    citabilité SÉMANTIQUE (remplace la règle des 150 mots)
+    technical.py     robots, sitemap, llms.txt, AI crawlers, HTTPS, head tags
+    schema_ld.py     JSON-LD, entity vs transactional, sameAs
+    citability.py    SEMANTIC citability (replaces the 150-word rule)
   providers/
-    base.py          contrat commun ; clés depuis l'environnement uniquement
-    openai_provider.py  fonctionnel (compatible OpenRouter via base_url)
-    mock.py          déterministe, hors ligne, pour tests et démos
-  visibility.py      consensus multi-fournisseurs + confiance explicite
-  report.py          md / json, chaque donnée étiquetée par sa nature
-  cli.py             peau CLI (aucune logique métier)
+    base.py          common contract; keys from the environment only
+    openai_provider.py    OpenAI / OpenRouter-compatible
+    anthropic_provider.py Anthropic (Claude)
+    mock.py          deterministic, offline, for tests and demos
+  visibility.py      multi-provider consensus + explicit confidence
+  competitive.py     comparison + "why they win" + share of voice
+  remediation.py     fix generation, never fabricating facts
+  report.py          md / json
+  report_html.py     standalone shareable HTML
+  history.py         project mode + monitoring + regression detection
+  api.py             REST API (the SaaS seam)
+  cli.py             CLI skin (no business logic)
 ```
 
-## Matrice EXISTANT / AMÉLIORÉ / NOUVEAU
+## EXISTING / IMPROVED / NEW matrix
 
-| Capacité | Amont | CiteRank |
+| Capability | Upstream | CiteRank |
 |---|---|---|
-| Audit technique | ✅ skill | ✅ **moteur typé** |
-| Analyse de schéma | ✅ | ✅ entité vs transactionnel, sameAs |
-| Citabilité | règle 150 mots | 🔁 **signaux sémantiques** |
-| Crawl partagé | ❌ (refetch) | 🆕 crawl unique mis en cache |
-| Anti-SSRF | ❌ | 🆕 validation d'URL à l'entrée |
-| Readiness vs Visibility | ❌ mélangés | 🆕 **séparés** |
-| Visibilité réelle (LLM) | partielle | 🆕 consensus + confiance |
-| Étiquetage mesuré/déduit | ❌ | 🆕 partout |
-| Moteur indépendant | ❌ | 🆕 **cœur réutilisable** |
-| Share of Voice | ❌ | ⏳ roadmap |
-| Remédiation `/geo fix` | ❌ | ⏳ roadmap |
-| Monitoring historique | ❌ | ⏳ roadmap |
-| Rapport PDF | ✅ | ⏳ roadmap |
+| Technical audit | ✅ skill | ✅ **typed engine** |
+| Schema analysis | ✅ | ✅ entity vs transactional, sameAs |
+| Citability | 150-word rule | 🔁 **semantic signals** |
+| Shared crawl | ❌ (refetch) | 🆕 single cached crawl |
+| Anti-SSRF | ❌ | 🆕 URL validation at entry |
+| Readiness vs Visibility | ❌ mixed | 🆕 **separated** |
+| Real visibility (LLM) | partial | 🆕 consensus + confidence |
+| Measured/inferred labeling | ❌ | 🆕 everywhere |
+| Independent engine | ❌ | 🆕 **reusable core** |
+| Competitive intelligence | ❌ | ✅ comparison + "why they win" |
+| Share of voice | ❌ | ✅ multi-brand |
+| Remediation `fix` | ❌ | ✅ no fabricated facts |
+| Shareable HTML report | ❌ | ✅ light/dark, white-label |
+| Monitoring + regressions | ❌ | ✅ `.geo/` snapshots |
+| REST API | ❌ | ✅ `citerank serve` |
+| PDF report | ✅ | ⏳ roadmap |
 
-## Feuille de route
+## Roadmap
 
-1. ✅ **Phase 1** — moteur + Readiness locale + Visibility OpenAI + rapports + tests.
-2. Share of Voice + intelligence concurrentielle (`/geo competitors`).
-3. Générateur d'univers de requêtes déterministe (comparaisons mensuelles).
-4. Entity Intelligence (graphe d'entité, sameAs, sources externes).
-5. Remédiation (`/geo fix`) : diffs proposés, jamais de faits fabriqués.
-6. Monitoring + `/geo compare` (7 / 30 / 90 jours, détection de régressions).
-7. Adaptateurs Gemini, Perplexity, Anthropic.
-8. Rapport PDF « livrable de conseil » + mode marque blanche agence.
-9. Couche API REST → dashboard → SaaS, sans toucher au moteur.
+1. ✅ Engine + local Readiness + OpenAI/Anthropic visibility + reports + tests.
+2. ✅ Competitive intelligence + share of voice.
+3. ✅ Remediation (`fix`), never fabricating facts.
+4. ✅ Shareable report + monitoring.
+5. ✅ REST API layer.
+6. Gemini and Perplexity adapters.
+7. Deterministic query-universe generator (monthly comparisons).
+8. Entity Intelligence (entity graph, sameAs, external sources).
+9. "Consulting deliverable" PDF report + white-label agency mode.
+10. REST API → dashboard → SaaS, without touching the engine.

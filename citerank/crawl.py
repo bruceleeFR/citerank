@@ -1,16 +1,16 @@
 """
-Crawl normalisé et partagé.
+Normalized, shared crawl.
 
-Deux idées, toutes deux tirées des faiblesses du projet amont :
+Two ideas, both drawn from the upstream's weaknesses:
 
-1. UNE seule récupération par URL, réutilisée par tous les analyseurs (point 23).
-   Le cache mémoire garantit qu'un audit ne retélécharge jamais la même page,
-   même si dix analyseurs la demandent.
+1. ONE fetch per URL, reused by every analyzer (point 23). The in-memory cache
+   guarantees an audit never refetches the same page, even if ten analyzers ask
+   for it.
 
-2. Validation d'URL DÈS l'entrée (point 17). On refuse par défaut localhost,
-   les IP privées et les points de métadonnées cloud (169.254.169.254). Un
-   outil qui accepte une URL arbitraire et va la chercher est une SSRF en
-   puissance : ici c'est bloqué avant le moindre octet réseau.
+2. URL validation AT ENTRY (point 17). By default we refuse localhost, private
+   IPs and cloud metadata endpoints (169.254.169.254). A tool that accepts an
+   arbitrary URL and goes to fetch it is a latent SSRF: here it's blocked before
+   the first network byte.
 """
 
 from __future__ import annotations
@@ -25,56 +25,57 @@ from bs4 import BeautifulSoup
 
 from .models import CrawledPage, now_iso
 
-UA = "CiteRankBot/0.1 (+https://github.com/; AI search readiness auditor)"
+UA = "CiteRankBot/0.1 (+https://github.com/bruceleeFR/citerank; AI search readiness auditor)"
 
-# Plages interdites par défaut : boucle locale, réseaux privés, lien-local
-# (dont le point de métadonnées cloud 169.254.169.254), et l'espace de
-# documentation. Débloquables seulement en mode développement explicite.
-def _est_hote_sur(host: str) -> tuple[bool, str]:
+
+# Ranges forbidden by default: loopback, private networks, link-local (including
+# the cloud metadata endpoint 169.254.169.254), reserved and multicast space.
+# Only unlockable in explicit development mode.
+def _is_safe_host(host: str) -> tuple[bool, str]:
     if not host:
-        return False, "hôte vide"
+        return False, "empty host"
     if host.lower() in {"localhost", "localhost.localdomain"}:
-        return False, "localhost interdit"
+        return False, "localhost forbidden"
     try:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror:
-        return False, f"résolution DNS impossible pour {host}"
-    for famille, *_rest, sockaddr in infos:
+        return False, f"DNS resolution failed for {host}"
+    for _family, *_rest, sockaddr in infos:
         ip = ipaddress.ip_address(sockaddr[0])
         if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved or ip.is_multicast:
-            return False, f"cible interne interdite ({ip})"
+            return False, f"internal target forbidden ({ip})"
     return True, ""
 
 
-def valider_url(url: str, autoriser_local: bool = False) -> str:
-    """Renvoie une URL normalisée, ou lève ValueError. Première ligne de défense."""
+def validate_url(url: str, allow_local: bool = False) -> str:
+    """Return a normalized URL, or raise ValueError. First line of defense."""
     u = urlparse(url if "://" in url else "https://" + url)
     if u.scheme not in {"http", "https"}:
-        raise ValueError(f"schéma refusé : {u.scheme!r} (http/https uniquement)")
+        raise ValueError(f"scheme refused: {u.scheme!r} (http/https only)")
     if not u.netloc:
-        raise ValueError("URL sans hôte")
-    if not autoriser_local:
-        sur, motif = _est_hote_sur(u.hostname or "")
-        if not sur:
-            raise ValueError(f"URL bloquée : {motif}")
+        raise ValueError("URL without host")
+    if not allow_local:
+        safe, reason = _is_safe_host(u.hostname or "")
+        if not safe:
+            raise ValueError(f"URL blocked: {reason}")
     return u.geturl()
 
 
 class Crawler:
     """
-    Récupère et normalise les pages. Un cache par instance : le même Crawler
-    passé à tous les analyseurs = zéro requête en double.
+    Fetches and normalizes pages. One cache per instance: the same Crawler passed
+    to every analyzer = zero duplicate requests.
     """
 
-    def __init__(self, *, timeout: float = 20.0, concurrence: int = 5,
-                 autoriser_local: bool = False):
+    def __init__(self, *, timeout: float = 20.0, concurrency: int = 5,
+                 allow_local: bool = False):
         self._cache: dict[str, CrawledPage] = {}
         self._timeout = aiohttp.ClientTimeout(total=timeout)
-        self._sem = asyncio.Semaphore(concurrence)
-        self._autoriser_local = autoriser_local
+        self._sem = asyncio.Semaphore(concurrency)
+        self._allow_local = allow_local
 
     async def get(self, url: str, session: aiohttp.ClientSession) -> CrawledPage:
-        url = valider_url(url, self._autoriser_local)
+        url = validate_url(url, self._allow_local)
         if url in self._cache:
             return self._cache[url]
         async with self._sem:
@@ -86,25 +87,24 @@ class Crawler:
         try:
             async with session.get(url, allow_redirects=True) as r:
                 html = await r.text(errors="replace")
-                page = self._parse(url, str(r.url), r.status, dict(r.headers), html)
-                return page
+                return self._parse(url, str(r.url), r.status, dict(r.headers), html)
         except asyncio.TimeoutError:
             return CrawledPage(url=url, status=0, final_url=url, fetched_at=now_iso(),
-                               headers={}, html="", text="", error="délai dépassé")
+                               headers={}, html="", text="", error="timed out")
         except aiohttp.ClientError as e:
             return CrawledPage(url=url, status=0, final_url=url, fetched_at=now_iso(),
-                               headers={}, html="", text="", error=f"réseau : {e}")
+                               headers={}, html="", text="", error=f"network: {e}")
 
     def _parse(self, url, final_url, status, headers, html) -> CrawledPage:
         soup = BeautifulSoup(html, "html.parser")
 
-        for balise in soup(["script", "style", "noscript", "template"]):
-            balise.extract()
-        # On garde le JSON-LD : il a été retiré ci-dessus avec les <script>, on
-        # le relit donc sur le HTML brut, pas sur l'arbre nettoyé.
-        json_ld = self._extraire_json_ld(html)
+        for tag in soup(["script", "style", "noscript", "template"]):
+            tag.extract()
+        # JSON-LD was removed above with the <script> tags, so we re-read it from
+        # the raw HTML, not from the cleaned tree.
+        json_ld = self._extract_json_ld(html)
 
-        titre = (soup.title.string or "").strip() if soup.title else ""
+        title = (soup.title.string or "").strip() if soup.title else ""
         meta_desc = ""
         m = soup.find("meta", attrs={"name": "description"})
         if m and m.get("content"):
@@ -120,46 +120,46 @@ class Crawler:
                     for h in soup.find_all(["h1", "h2", "h3", "h4"])]
 
         base = urlparse(final_url)
-        internes, externes = [], []
+        internal, external = [], []
         for a in soup.find_all("a", href=True):
             href = urljoin(final_url, a["href"])
             hp = urlparse(href)
             if hp.scheme not in {"http", "https"}:
                 continue
-            (internes if hp.netloc == base.netloc else externes).append(href)
+            (internal if hp.netloc == base.netloc else external).append(href)
 
-        texte = " ".join(soup.get_text(" ").split())
+        text = " ".join(soup.get_text(" ").split())
 
         return CrawledPage(
             url=url, status=status, final_url=final_url, fetched_at=now_iso(),
             headers={k.lower(): v for k, v in headers.items()},
-            html=html, text=texte, title=titre, meta_description=meta_desc,
+            html=html, text=text, title=title, meta_description=meta_desc,
             lang=lang, h1=h1, headings=headings, json_ld=json_ld,
-            links_internal=sorted(set(internes)), links_external=sorted(set(externes)),
+            links_internal=sorted(set(internal)), links_external=sorted(set(external)),
         )
 
     @staticmethod
-    def _extraire_json_ld(html: str) -> list[dict]:
+    def _extract_json_ld(html: str) -> list[dict]:
         import json
         import re
-        blocs = []
+        blocks = []
         for m in re.finditer(
             r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
             html, re.DOTALL | re.IGNORECASE,
         ):
-            brut = m.group(1).strip()
+            raw = m.group(1).strip()
             try:
-                data = json.loads(brut)
-                blocs.extend(data if isinstance(data, list) else [data])
+                data = json.loads(raw)
+                blocks.extend(data if isinstance(data, list) else [data])
             except json.JSONDecodeError:
-                # Un JSON-LD invalide est en soi un constat, remonté par
-                # l'analyseur de schéma. Ici on ne fait que le sauter.
+                # Invalid JSON-LD is itself a finding, raised by the schema
+                # analyzer. Here we just skip it.
                 continue
-        return blocs
+        return blocks
 
-    async def texte_brut(self, url: str, session: aiohttp.ClientSession) -> str:
-        """Pour robots.txt / llms.txt : pas de parsing HTML."""
-        url = valider_url(url, self._autoriser_local)
+    async def fetch_text(self, url: str, session: aiohttp.ClientSession) -> str:
+        """For robots.txt / llms.txt: no HTML parsing."""
+        url = validate_url(url, self._allow_local)
         try:
             async with session.get(url, allow_redirects=True) as r:
                 if 200 <= r.status < 300:
@@ -169,8 +169,8 @@ class Crawler:
         return ""
 
 
-def nouvelle_session(timeout: float = 20.0) -> aiohttp.ClientSession:
+def new_session(timeout: float = 20.0) -> aiohttp.ClientSession:
     return aiohttp.ClientSession(
         timeout=aiohttp.ClientTimeout(total=timeout),
-        headers={"User-Agent": UA, "Accept-Language": "fr,en;q=0.8"},
+        headers={"User-Agent": UA, "Accept-Language": "en,fr;q=0.8"},
     )

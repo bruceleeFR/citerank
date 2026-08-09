@@ -1,27 +1,25 @@
-# Sécurité
+# Security
 
-## Surface et garde-fous
+## Surface and safeguards
 
-CiteRank va chercher des URL fournies par l'utilisateur. Deux risques sont traités
-à la racine :
+CiteRank fetches user-provided URLs. Two risks are handled at the root:
 
-- **SSRF.** Toute URL est validée avant le moindre octet réseau
-  (`citerank/crawl.py`). Sont refusés par défaut : `localhost`, les plages
-  privées (RFC 1918), le lien-local — dont le point de métadonnées cloud
-  `169.254.169.254` — ainsi que les schémas autres que `http`/`https`. Le
-  déblocage local n'est possible qu'avec le drapeau explicite `--allow-local`.
-- **Fuite de secrets.** Les clés d'API ne viennent que de l'environnement, jamais
-  du code ni des journaux. Les rapports n'incluent aucun secret. Le fournisseur
-  factice ne parle à aucun réseau.
+- **SSRF.** Every URL is validated before a single network byte
+  (`citerank/crawl.py`). Refused by default: `localhost`, private ranges
+  (RFC 1918), link-local — including the cloud metadata endpoint
+  `169.254.169.254` — and schemes other than `http`/`https`. Local access is only
+  possible with the explicit `--allow-local` flag.
+- **Secret leakage.** API keys come only from the environment, never from code or
+  logs. Reports contain no secrets. The mock provider talks to no network.
 
-## Ce que CiteRank envoie où
+## What CiteRank sends where
 
-- L'audit de **Readiness** est 100 % local : il ne contacte que le site analysé.
-- La **Visibilité** envoie les *requêtes de test* aux fournisseurs IA configurés
-  (OpenAI, Anthropic…). Elle n'envoie **pas** le code source du site.
-- Chaque fournisseur se désactive en retirant sa clé de l'environnement.
+- The **Readiness** audit is 100% local: it only contacts the analyzed site.
+- **Visibility** sends *test queries* to the configured AI providers (OpenAI,
+  Anthropic…). It does **not** send the site's source code.
+- Each provider is disabled by removing its key from the environment.
 
-## Signaler une faille
+## Reporting a vulnerability
 
-Ouvrez une *issue* privée (Security advisory) plutôt qu'un ticket public. Décrivez
-la reproduction. Nous répondons avant divulgation.
+Open a private Security advisory rather than a public issue. Describe the
+reproduction. We respond before disclosure.

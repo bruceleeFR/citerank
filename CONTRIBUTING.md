@@ -1,34 +1,31 @@
-# Contribuer
+# Contributing
 
-Merci de l'intérêt. Quelques principes qui font l'identité du projet — les
-respecter, c'est garder ce qui rend CiteRank crédible.
+Thanks for the interest. A few principles define the project's identity —
+respecting them keeps CiteRank credible.
 
-## Les règles non négociables
+## Non-negotiable rules
 
-1. **Ne jamais présenter une déduction comme une mesure.** Toute donnée porte sa
-   nature (`Nature` dans `models.py`). Une heuristique est `INFERRED`, pas
-   `MEASURED`.
-2. **Ne jamais fabriquer un fait.** La remédiation ne remplit que des champs
-   dérivés du site ou fournis par l'utilisateur. Pas de faux avis, adresse,
-   chiffre, profil.
-3. **Le moteur reste indépendant de l'interface.** Aucune logique métier dans la
-   CLI ou dans un futur skill : elle vit dans `citerank/`.
-4. **Pas de secret dans le code ni les journaux.** Les clés viennent de
-   l'environnement.
+1. **Never present an inference as a measurement.** Every data point carries its
+   nature (`Nature` in `models.py`). A heuristic is `INFERRED`, not `MEASURED`.
+2. **Never fabricate a fact.** Remediation only fills fields derived from the site
+   or provided by the user. No fake reviews, addresses, numbers, profiles.
+3. **The engine stays interface-independent.** No business logic in the CLI or a
+   future skill: it lives in `citerank/`.
+4. **No secrets in code or logs.** Keys come from the environment.
 
-## Développement
+## Development
 
 ```bash
 pip install -e ".[dev]"
-python tests/test_core.py     # tests hors réseau, aucun service requis
+python tests/test_core.py     # offline tests, no service required
 ruff check citerank           # style
 ```
 
-Les tests unitaires ne doivent dépendre d'aucun réseau : simulez le crawl avec une
-`CrawledPage` et les fournisseurs avec `MockProvider`.
+Unit tests must not depend on the network: mock the crawl with a `CrawledPage`
+and providers with `MockProvider`.
 
-## Ajouter un fournisseur IA
+## Adding an AI provider
 
-Implémentez `providers/base.Provider`, lisez la clé depuis l'environnement, ne
-levez jamais d'exception (retournez un `ProviderResult` vide en cas d'erreur), et
-enregistrez la classe dans `providers/__init__.py`.
+Implement `providers/base.Provider`, read the key from the environment, never
+raise (return an empty `ProviderResult` on error), and register the class in
+`providers/__init__.py`.

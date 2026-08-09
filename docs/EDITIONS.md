@@ -1,57 +1,56 @@
-# Éditions — ce qui est gratuit, ce qui est payant
+# Editions — what's free, what's paid
 
-Ce document fige la frontière pour que l'architecture ne dérive pas. La règle est
-simple et défendable :
+This document freezes the boundary so the architecture doesn't drift. The rule is
+simple and defensible:
 
-> **Gratuit = ce qui coûte 0 € à exécuter. Payant = ce qui appelle des API LLM
-> payantes, ou exige un serveur toujours allumé.**
+> **Free = anything that costs €0 to run. Paid = anything that calls paid LLM
+> APIs, or requires an always-on server.**
 
-Le client ne paie jamais pour *débloquer* une fonction bridée. Il paie parce
-qu'une infrastructure absorbe un coût réel à sa place. Zéro ressentiment.
+The customer never pays to *unlock* a crippled feature. They pay because
+infrastructure absorbs a real cost on their behalf. Zero resentment.
 
-## Édition Open-Source (MIT, auto-hébergée)
+## Open-Source edition (MIT, self-hosted)
 
-Tout ce qui est **local et déterministe**. Elle doit être excellente en
-elle-même : c'est l'acquisition, pas un produit d'appel mutilé.
+Everything that is **local and deterministic**. It must be excellent on its own:
+it's the acquisition, not a mutilated lead-gen product.
 
-| Capacité | Commande |
+| Capability | Command |
 |---|---|
-| Audit + Readiness (technique, schéma, citabilité) | `citerank audit` |
-| Comparaison concurrentielle (sur Readiness) | `citerank competitors` |
-| Génération de correctifs (JSON-LD, llms.txt, meta) | `citerank fix` |
-| Rapport HTML autonome et partageable | `citerank report` |
-| Instantanés et évolution en local | `citerank monitor` / `compare` |
-| Visibilité IA **avec ta propre clé API** | `citerank visibility` |
+| Audit + Readiness (technical, schema, citability) | `citerank audit` |
+| Competitive comparison (on Readiness) | `citerank competitors` |
+| Fix generation (JSON-LD, llms.txt, meta) | `citerank fix` |
+| Standalone shareable HTML report | `citerank report` |
+| Local snapshots and evolution | `citerank monitor` / `compare` |
+| AI visibility **with your own API key** | `citerank visibility` |
 
-La visibilité fonctionne en open-source **si l'utilisateur fournit sa clé** : il
-paie alors directement son fournisseur. C'est honnête et ça n'ampute rien.
+Visibility works in open-source **if the user brings their own key**: they pay
+their provider directly. That's honest and amputates nothing.
 
-## Édition Hébergée (SaaS, repo privé séparé)
+## Hosted edition (SaaS, separate private repo)
 
-Ce qui est **structurellement impossible** sur un laptop, ou qui **coûte de
-l'argent à faire tourner**. Le moteur MIT est importé tel quel — rien n'est
-réécrit (principe directeur, point 37).
+What is **structurally impossible** on a laptop, or **costs money to run**. The
+MIT engine is imported as-is — nothing is rewritten (guiding principle).
 
-| Capacité | Pourquoi c'est payant |
+| Capability | Why it's paid |
 |---|---|
-| Visibilité IA multi-moteurs clé en main | on absorbe le coût des appels LLM |
-| Share of Voice mesuré en continu | idem, à l'échelle et dans le temps |
-| Monitoring 24/7 + alertes de régression | exige un serveur toujours allumé |
-| Comptes équipe, portails clients marque blanche | multi-tenant, hébergement |
-| Tableau de bord historique, PDF à la chaîne | stockage et rendu côté serveur |
-| « Analyze » public : coller une URL sur le site | on protège derrière quota/compte |
+| Turnkey multi-engine AI visibility | we absorb the LLM call costs |
+| Continuous share-of-voice measurement | same, at scale and over time |
+| 24/7 monitoring + regression alerts | requires an always-on server |
+| Team accounts, white-label client portals | multi-tenant, hosting |
+| Historical dashboard, PDF at scale | server-side storage and rendering |
+| Public "Analyze": paste a URL on the site | protected behind quota/account |
 
-### Le piège à ne jamais oublier
+### The trap never to forget
 
-Un « Analyze » gratuit et public qui lance la visibilité pour chaque inconnu =
-une facture LLM qui explose au premier pic de trafic. Sur la version hébergée, la
-**Readiness reste l'accroche gratuite** (coût nul), la **Visibilité passe derrière
-un compte ou un quota**. La frontière gratuit/payant du produit hébergé est la
-même que celle entre les deux éditions : local vs coûteux.
+A free, public "Analyze" that runs visibility for every stranger = an LLM bill
+that explodes on the first traffic spike. On the hosted version, **Readiness stays
+the free hook** (zero cost), **Visibility goes behind an account or quota**. The
+hosted product's free/paid line is the same as the one between editions: local vs
+expensive.
 
-## Licence
+## Licensing
 
-- **Moteur** (`citerank/`) : MIT. Adoption maximale, l'acquisition l'exige.
-- **Couche SaaS** (dashboard, facturation, multi-tenant) : repo privé, importe le
-  moteur. Le moat n'est pas le code — c'est l'infra hébergée et l'absorption des
-  coûts API. Pas besoin de licence restrictive pour le protéger.
+- **Engine** (`citerank/`): MIT. Maximum adoption — acquisition demands it.
+- **SaaS layer** (dashboard, billing, multi-tenant): private repo, imports the
+  engine. The moat isn't the code — it's the hosted infra and absorbing API
+  costs. No restrictive license needed to protect it.

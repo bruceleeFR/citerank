@@ -1,20 +1,17 @@
 """
-Moteur de remédiation — de l'audit à la correction.
+Remediation engine — from audit to fix.
 
-Un audit qui ne fait que constater est à moitié utile (point 10). Ce module
-GÉNÈRE les correctifs : JSON-LD Organization, llms.txt, meta description,
-suggestions de titres.
+An audit that only reports is half-useful (point 10). This module GENERATES the
+fixes: Organization JSON-LD, llms.txt, meta description, title suggestions.
 
-RÈGLE ABSOLUE, non négociable (point 10) : ne jamais fabriquer de fait. Pas de
-faux avis, de fausse adresse, de faux chiffre, de fausse récompense, de faux
-profil `sameAs`. Un correctif ne remplit que des champs DÉRIVÉS de ce qui existe
-déjà (titre, domaine, description observée) ou explicitement fournis par
-l'utilisateur. Un champ inconnu est laissé vide, jamais inventé.
+ABSOLUTE, non-negotiable rule (point 10): never fabricate a fact. No fake
+reviews, address, number, award, profile. A fix only fills fields DERIVED from
+what already exists (title, domain, observed description) or explicitly provided
+by the user. An unknown field is left empty, never invented.
 
-Le moteur produit des objets `Fix` typés : chacun porte son contenu, sa cible et
-la façon de l'appliquer. C'est l'appelant (CLI, skill, SaaS) qui décide d'écrire
-ou de se contenter d'un extrait à coller — le moteur ne touche jamais un fichier
-de lui-même.
+The engine produces typed `Fix` objects: each carries its content, its target
+and how to apply it. It's the caller (CLI, skill, SaaS) that decides whether to
+write or just emit a snippet to paste — the engine never touches a file itself.
 """
 
 from __future__ import annotations
@@ -31,15 +28,15 @@ class Fix:
     id: str
     title: str
     kind: str            # "jsonld" | "file" | "meta" | "snippet"
-    target: str          # où l'appliquer (<head>, /llms.txt, balise <meta>…)
+    target: str          # where to apply it (<head>, /llms.txt, <meta> tag…)
     content: str
     note: str = ""
 
 
-def _brand_from(page: CrawledPage, contexte: SiteContext | None) -> str:
-    if contexte and contexte.brand:
-        return contexte.brand
-    # Dérivé du titre : le segment après le dernier tiret est souvent la marque.
+def _brand_from(page: CrawledPage, context: SiteContext | None) -> str:
+    if context and context.brand:
+        return context.brand
+    # Derived from the title: the segment after the last dash is often the brand.
     if page.title:
         for sep in (" — ", " – ", " | ", " - "):
             if sep in page.title:
@@ -50,27 +47,27 @@ def _brand_from(page: CrawledPage, contexte: SiteContext | None) -> str:
 
 
 def _logo_from(page: CrawledPage) -> str:
-    """Cherche un logo réel dans la page. Aucun ne sera inventé."""
+    """Look for a real logo in the page. None will be invented."""
     import re
     m = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)',
                   page.html, re.IGNORECASE)
     return m.group(1) if m else ""
 
 
-def organization_jsonld(page: CrawledPage, contexte: SiteContext | None,
+def organization_jsonld(page: CrawledPage, context: SiteContext | None,
                         *, name: str = "", legal_name: str = "",
                         same_as: list[str] | None = None) -> Fix:
     """
-    Génère un bloc Organization à partir des seuls faits disponibles. `same_as`
-    n'est inclus que si l'utilisateur le fournit — jamais deviné.
+    Generate an Organization block from available facts only. `same_as` is
+    included only if the user provides it — never guessed.
     """
-    racine = f"{urlparse(page.final_url).scheme}://{urlparse(page.final_url).netloc}"
-    brand = name or _brand_from(page, contexte)
+    root = f"{urlparse(page.final_url).scheme}://{urlparse(page.final_url).netloc}"
+    brand = name or _brand_from(page, context)
     org: dict = {
         "@context": "https://schema.org",
         "@type": "Organization",
         "name": brand,
-        "url": racine,
+        "url": root,
     }
     logo = _logo_from(page)
     if logo:
@@ -79,66 +76,65 @@ def organization_jsonld(page: CrawledPage, contexte: SiteContext | None,
         org["description"] = page.meta_description
     if legal_name and legal_name != brand:
         org["legalName"] = legal_name
-    # sameAs : uniquement ce qui est fourni et vérifiable. Vide sinon.
-    liens = [u for u in (same_as or []) if u.strip()]
-    if liens:
-        org["sameAs"] = liens
+    # sameAs: only what is provided and verifiable. Empty otherwise.
+    links = [u for u in (same_as or []) if u.strip()]
+    if links:
+        org["sameAs"] = links
 
-    contenu = ('<script type="application/ld+json">\n'
+    content = ('<script type="application/ld+json">\n'
                + json.dumps(org, ensure_ascii=False, indent=2)
                + "\n</script>")
     return Fix(
         id="add-organization-jsonld",
-        title="Ajouter un schéma Organization",
-        kind="jsonld", target="<head>", content=contenu,
-        note="À coller dans le <head>. sameAs laissé vide faute de profils vérifiés — "
-             "à compléter avec les vrais liens LinkedIn/Wikidata quand ils existent.",
+        title="Add an Organization schema",
+        kind="jsonld", target="<head>", content=content,
+        note="Paste into <head>. sameAs left empty for lack of verified profiles — "
+             "fill it with the real LinkedIn/Wikidata links once they exist.",
     )
 
 
-def llms_txt(page: CrawledPage, contexte: SiteContext | None) -> Fix:
-    """Génère un llms.txt à partir des liens internes réels de la page d'accueil."""
-    brand = _brand_from(page, contexte)
+def llms_txt(page: CrawledPage, context: SiteContext | None) -> Fix:
+    """Generate an llms.txt from the home page's real internal links."""
+    brand = _brand_from(page, context)
     desc = page.meta_description or ""
-    lignes = [f"# {brand}", ""]
+    lines = [f"# {brand}", ""]
     if desc:
-        lignes += [f"> {desc}", ""]
-    lignes.append("## Pages principales")
-    vus = set()
-    for lien in page.links_internal[:25]:
-        chemin = urlparse(lien).path.strip("/")
-        if not chemin or chemin in vus:
+        lines += [f"> {desc}", ""]
+    lines.append("## Main pages")
+    seen = set()
+    for link in page.links_internal[:25]:
+        path = urlparse(link).path.strip("/")
+        if not path or path in seen:
             continue
-        vus.add(chemin)
-        label = chemin.split("/")[-1].replace("-", " ").capitalize()
-        lignes.append(f"- [{label}]({lien})")
+        seen.add(path)
+        label = path.split("/")[-1].replace("-", " ").capitalize()
+        lines.append(f"- [{label}]({link})")
     return Fix(
-        id="generate-llms-txt", title="Générer un llms.txt",
-        kind="file", target="/llms.txt", content="\n".join(lignes) + "\n",
-        note="Fichier à publier à la racine. Liste dérivée des liens internes réels.",
+        id="generate-llms-txt", title="Generate an llms.txt",
+        kind="file", target="/llms.txt", content="\n".join(lines) + "\n",
+        note="File to publish at the root. List derived from real internal links.",
     )
 
 
 def meta_description(page: CrawledPage) -> Fix | None:
     if page.meta_description:
         return None
-    # On propose un gabarit dérivé du titre — pas une phrase inventée sur le fond.
+    # We propose a title-derived template — not a sentence invented about substance.
     base = page.title or _brand_from(page, None)
-    contenu = (f'<meta name="description" content="{base[:150]}">')
+    content = f'<meta name="description" content="{base[:150]}">'
     return Fix(
-        id="add-meta-description", title="Ajouter une meta description",
-        kind="meta", target="<head>", content=contenu,
-        note="Gabarit dérivé du titre — à réécrire avec une phrase de valeur réelle.",
+        id="add-meta-description", title="Add a meta description",
+        kind="meta", target="<head>", content=content,
+        note="Title-derived template — rewrite it with a real value sentence.",
     )
 
 
-def proposer(audit: SiteAudit, page: CrawledPage, *,
-             name: str = "", legal_name: str = "",
-             same_as: list[str] | None = None) -> list[Fix]:
+def propose(audit: SiteAudit, page: CrawledPage, *,
+            name: str = "", legal_name: str = "",
+            same_as: list[str] | None = None) -> list[Fix]:
     """
-    Sélectionne les correctifs pertinents pour cet audit. On ne propose un fix
-    que si le constat correspondant existe : pas de correctif pour un problème
-    qui n'a pas été détecté.
+    Select the fixes relevant to this audit. We only propose a fix if the matching
+    finding exists: no fix for a problem that wasn't detected.
     """
     ids = {f.id for f in audit.findings}
     fixes: list[Fix] = []

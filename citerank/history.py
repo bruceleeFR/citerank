@@ -1,12 +1,12 @@
 """
-Mode projet et monitoring (points 12, 20).
+Project mode and monitoring (points 12, 20).
 
-`citerank init` crée un dossier `.geo/` ; les audits suivants y déposent un
-instantané horodaté. `citerank compare` mesure l'évolution — et surtout détecte
-les RÉGRESSIONS, ce qui est le vrai intérêt d'un suivi : un score qui baisse est
-plus urgent qu'un score bas et stable.
+`citerank init` creates a `.geo/` folder; subsequent audits drop a timestamped
+snapshot into it. `citerank compare` measures the evolution — and above all
+detects REGRESSIONS, which is the real point of tracking: a falling score is
+more urgent than a low but stable one.
 
-Tout est local et déterministe : aucun appel réseau, un simple magasin de JSON.
+Everything is local and deterministic: no network call, just a JSON store.
 """
 
 from __future__ import annotations
@@ -17,26 +17,26 @@ from pathlib import Path
 
 from .models import SiteAudit
 
-DOSSIER = ".geo"
+FOLDER = ".geo"
 
 
-def racine_projet(depart: str | None = None) -> Path:
-    """Remonte l'arborescence jusqu'à trouver un .geo/, sinon le dossier courant."""
-    p = Path(depart or os.getcwd()).resolve()
+def project_root(start: str | None = None) -> Path:
+    """Walk up the tree to find a .geo/, otherwise the current folder."""
+    p = Path(start or os.getcwd()).resolve()
     for parent in [p, *p.parents]:
-        if (parent / DOSSIER).is_dir():
-            return parent / DOSSIER
-    return p / DOSSIER
+        if (parent / FOLDER).is_dir():
+            return parent / FOLDER
+    return p / FOLDER
 
 
-def init(depart: str | None = None) -> Path:
-    base = Path(depart or os.getcwd()).resolve() / DOSSIER
+def init(start: str | None = None) -> Path:
+    base = Path(start or os.getcwd()).resolve() / FOLDER
     (base / "history").mkdir(parents=True, exist_ok=True)
     (base / "reports").mkdir(parents=True, exist_ok=True)
     cfg = base / "config.yaml"
     if not cfg.exists():
         cfg.write_text(
-            "# Projet CiteRank\n"
+            "# CiteRank project\n"
             "agency:\n  name: \"\"\n  email: \"\"\n"
             "branding:\n  primary_color: \"#ff8a4c\"\n  accent_color: \"#8b7dff\"\n"
             "report:\n  show_methodology: true\n  show_competitors: true\n",
@@ -44,31 +44,31 @@ def init(depart: str | None = None) -> Path:
     return base
 
 
-def _slug(domaine: str) -> str:
-    return domaine.replace(".", "_").replace(":", "_")
+def _slug(domain: str) -> str:
+    return domain.replace(".", "_").replace(":", "_")
 
 
-def enregistrer(audit: SiteAudit, base: Path | None = None) -> Path:
-    base = base or racine_projet()
+def save_snapshot(audit: SiteAudit, base: Path | None = None) -> Path:
+    base = base or project_root()
     hist = base / "history"
     hist.mkdir(parents=True, exist_ok=True)
-    # L'horodatage vient de l'audit lui-même (audit.started_at), pas d'une
-    # horloge lue ici : l'instantané reste fidèle au moment de la mesure.
-    horodatage = audit.started_at.replace(":", "").replace("-", "").replace("+", "_")
-    chemin = hist / f"{_slug(audit.domain)}-{horodatage}.json"
-    chemin.write_text(json.dumps(audit.to_dict(), ensure_ascii=False, indent=2),
-                      encoding="utf-8")
-    return chemin
+    # The timestamp comes from the audit itself (audit.started_at), not from a
+    # clock read here: the snapshot stays faithful to the moment of measurement.
+    stamp = audit.started_at.replace(":", "").replace("-", "").replace("+", "_")
+    path = hist / f"{_slug(audit.domain)}-{stamp}.json"
+    path.write_text(json.dumps(audit.to_dict(), ensure_ascii=False, indent=2),
+                    encoding="utf-8")
+    return path
 
 
-def instantanes(domaine: str, base: Path | None = None) -> list[dict]:
-    base = base or racine_projet()
+def snapshots(domain: str, base: Path | None = None) -> list[dict]:
+    base = base or project_root()
     hist = base / "history"
     if not hist.is_dir():
         return []
-    fichiers = sorted(hist.glob(f"{_slug(domaine)}-*.json"))
+    files = sorted(hist.glob(f"{_slug(domain)}-*.json"))
     out = []
-    for f in fichiers:
+    for f in files:
         try:
             out.append(json.loads(f.read_text(encoding="utf-8")))
         except json.JSONDecodeError:
@@ -76,31 +76,31 @@ def instantanes(domaine: str, base: Path | None = None) -> list[dict]:
     return out
 
 
-def comparer(ancien: dict, nouveau: dict) -> dict:
+def compare(old: dict, new: dict) -> dict:
     """
-    Écart entre deux instantanés. Retourne un dict typé : évolution du score
-    global, par score, et la liste des régressions (baisses) mises en avant.
+    Difference between two snapshots. Returns a typed dict: overall-score
+    evolution, per-score evolution, and the list of regressions (drops) surfaced.
     """
     def scores(snap):
         return {s["key"]: s["value"] for s in snap.get("scores", [])}
 
-    sa, sn = scores(ancien), scores(nouveau)
+    so, sn = scores(old), scores(new)
     deltas = []
-    for cle in sorted(set(sa) | set(sn)):
-        avant, apres = sa.get(cle), sn.get(cle)
-        if avant is None or apres is None:
+    for key in sorted(set(so) | set(sn)):
+        before, after = so.get(key), sn.get(key)
+        if before is None or after is None:
             continue
-        deltas.append({"key": cle, "avant": avant, "apres": apres,
-                       "delta": round(apres - avant, 1)})
+        deltas.append({"key": key, "before": before, "after": after,
+                       "delta": round(after - before, 1)})
 
     regressions = [d for d in deltas if d["delta"] <= -3]
     gains = [d for d in deltas if d["delta"] >= 3]
-    g_avant = ancien.get("overall_ai_search_score", 0)
-    g_apres = nouveau.get("overall_ai_search_score", 0)
+    g_before = old.get("overall_ai_search_score", 0)
+    g_after = new.get("overall_ai_search_score", 0)
     return {
-        "de": ancien.get("started_at"), "a": nouveau.get("started_at"),
-        "global": {"avant": g_avant, "apres": g_apres,
-                   "delta": round(g_apres - g_avant, 1)},
+        "from": old.get("started_at"), "to": new.get("started_at"),
+        "overall": {"before": g_before, "after": g_after,
+                    "delta": round(g_after - g_before, 1)},
         "deltas": deltas,
         "regressions": regressions,
         "gains": gains,

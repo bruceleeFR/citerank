@@ -1,19 +1,18 @@
 """
-Couche API REST — la porte vers le SaaS (point 37).
+REST API layer — the door to the SaaS (point 37).
 
-C'est ici que le principe directeur paie : l'API ne réimplémente RIEN. Elle
-appelle `engine`, `competitive`, `report_html` — exactement comme la CLI. Le
-futur dashboard Lamarca tapera cette API, et le moteur ne saura même pas qu'il
-sert un SaaS plutôt qu'un terminal.
+This is where the guiding principle pays off: the API reimplements NOTHING. It
+calls `engine`, `competitive`, `report_html` — exactly like the CLI. The future
+Lamarca dashboard will hit this API, and the engine won't even know it's serving
+a SaaS rather than a terminal.
 
-Bâtie sur aiohttp, déjà présent : aucune dépendance nouvelle. Volontairement
-minimale et en lecture seule — la Readiness est gratuite, donc exposable ; la
-Visibilité (coûteuse) restera derrière un quota dans la couche hébergée, pas
-ici.
+Built on aiohttp, already present: no new dependency. Deliberately minimal and
+read-only — Readiness is free, so it's exposable; Visibility (costly) will sit
+behind a quota in the hosted layer, not here.
 
-Sécurité : chaque URL passe par `valider_url` (anti-SSRF) avant toute requête,
-et un sémaphore borne la concurrence pour qu'un pic de trafic ne fasse pas
-tomber le service.
+Security: every URL passes through `validate_url` (anti-SSRF) before any request,
+and a semaphore bounds concurrency so a traffic spike doesn't take the service
+down.
 """
 
 from __future__ import annotations
@@ -23,12 +22,12 @@ import asyncio
 from aiohttp import web
 
 from . import competitive, engine, report_html
-from .crawl import valider_url
+from .crawl import validate_url
 
-_LIMITE = asyncio.Semaphore(8)  # borne le nombre d'audits simultanés
+_LIMIT = asyncio.Semaphore(8)  # bound the number of concurrent audits
 
 
-def _json_erreur(message: str, code: int = 400) -> web.Response:
+def _json_error(message: str, code: int = 400) -> web.Response:
     return web.json_response({"error": message}, status=code)
 
 
@@ -38,56 +37,56 @@ async def _health(_req: web.Request) -> web.Response:
 
 
 async def _audit(req: web.Request) -> web.Response:
-    data = await _corps(req)
+    data = await _body(req)
     url = (data or {}).get("url", "")
     if not url:
-        return _json_erreur("champ 'url' requis")
+        return _json_error("field 'url' required")
     try:
-        valider_url(url)                       # rejette localhost / IP privées / etc.
+        validate_url(url)                      # rejects localhost / private IPs / etc.
     except ValueError as e:
-        return _json_erreur(f"URL refusée : {e}", 422)
-    async with _LIMITE:
+        return _json_error(f"URL refused: {e}", 422)
+    async with _LIMIT:
         audit = await engine.audit(url)
     return web.json_response(audit.to_dict())
 
 
 async def _competitors(req: web.Request) -> web.Response:
-    data = await _corps(req)
+    data = await _body(req)
     url = (data or {}).get("url", "")
-    concurrents = (data or {}).get("competitors", [])
-    if not url or not concurrents:
-        return _json_erreur("champs 'url' et 'competitors' (liste) requis")
+    competitors = (data or {}).get("competitors", [])
+    if not url or not competitors:
+        return _json_error("fields 'url' and 'competitors' (list) required")
     try:
-        valider_url(url)
-        for c in concurrents:
-            valider_url(c)
+        validate_url(url)
+        for c in competitors:
+            validate_url(c)
     except ValueError as e:
-        return _json_erreur(f"URL refusée : {e}", 422)
-    async with _LIMITE:
-        comp = await competitive.comparer(url, list(concurrents))
+        return _json_error(f"URL refused: {e}", 422)
+    async with _LIMIT:
+        comp = await competitive.compare(url, list(competitors))
     return web.json_response({
-        "cible": comp.cible.to_dict(),
-        "tableau": comp.tableau(),
-        "rang": comp.rang_cible(),
-        "explication": competitive.expliquer_ecart(comp),
+        "target": comp.target.to_dict(),
+        "table": comp.table(),
+        "rank": comp.target_rank(),
+        "explanation": competitive.explain_gap(comp),
     })
 
 
 async def _report(req: web.Request) -> web.Response:
     url = req.query.get("url", "")
     if not url:
-        return _json_erreur("paramètre 'url' requis")
+        return _json_error("query param 'url' required")
     try:
-        valider_url(url)
+        validate_url(url)
     except ValueError as e:
-        return _json_erreur(f"URL refusée : {e}", 422)
-    async with _LIMITE:
+        return _json_error(f"URL refused: {e}", 422)
+    async with _LIMIT:
         audit = await engine.audit(url)
-    html = report_html.rendre(audit, marque_agence=req.query.get("agency", ""))
+    html = report_html.render(audit, agency_brand=req.query.get("agency", ""))
     return web.Response(text=html, content_type="text/html")
 
 
-async def _corps(req: web.Request) -> dict | None:
+async def _body(req: web.Request) -> dict | None:
     if req.can_read_body:
         try:
             return await req.json()
@@ -96,17 +95,17 @@ async def _corps(req: web.Request) -> dict | None:
     return None
 
 
-def creer_app() -> web.Application:
+def create_app() -> web.Application:
     app = web.Application()
     app.add_routes([
         web.get("/health", _health),
         web.post("/api/audit", _audit),
         web.post("/api/competitors", _competitors),
-        web.get("/api/report", _report),           # renvoie le rapport HTML
+        web.get("/api/report", _report),           # returns the HTML report
     ])
     return app
 
 
-def servir(host: str = "127.0.0.1", port: int = 8900) -> None:
-    web.run_app(creer_app(), host=host, port=port, print=lambda *_: None)
-    # (print silencieux : la CLI affiche sa propre bannière)
+def serve(host: str = "127.0.0.1", port: int = 8900) -> None:
+    web.run_app(create_app(), host=host, port=port, print=lambda *_: None)
+    # (silent print: the CLI prints its own banner)

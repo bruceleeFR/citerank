@@ -1,102 +1,113 @@
 # CiteRank
 
-**Intelligence AI-Search open-source.** Mesurez, comprenez et améliorez la façon
-dont une marque apparaît dans les réponses de ChatGPT, Gemini, Perplexity et
-Claude — pas seulement dans Google.
+**Open-source AI-Search intelligence.** Measure, understand and improve how a
+brand shows up in the answers of ChatGPT, Gemini, Perplexity and Claude — not
+just in Google.
 
-CiteRank répond à quatre questions que les outils SEO classiques ne posent pas :
+CiteRank answers four questions that classic SEO tools don't ask:
 
-1. **Les moteurs IA comprennent-ils ce site ?** → score de *Readiness*
-2. **Les moteurs IA mentionnent-ils cette marque ?** → score de *Visibilité*
-3. **Pourquoi un concurrent est-il cité à sa place ?** → *intelligence concurrentielle*
-4. **Que changer exactement ?** → *remédiation*
+1. **Can AI engines understand this site?** → *Readiness* score
+2. **Do AI engines actually mention this brand?** → *Visibility* score
+3. **Why does a competitor get cited instead?** → *competitive intelligence*
+4. **What exactly should change?** → *remediation*
 
-## Ce qui le distingue
+## What makes it different
 
-- **Un vrai moteur, pas un paquet de fichiers Markdown.** Toute la logique vit
-  dans un package Python (`citerank/`), indépendant de l'interface. La CLI, le
-  skill Claude Code, une future API REST et un SaaS ne sont que des peaux sur ce
-  cœur. C'est ce qui permet de passer d'un outil de terminal à un produit hébergé
-  sans réécrire l'analyse.
-- **Readiness ≠ Visibilité.** Un site parfaitement préparé n'est pas forcément
-  cité. On ne confond jamais les deux, dans les scores comme dans les rapports.
-- **La couche gratuite est locale.** L'audit de Readiness ne fait aucun appel LLM :
-  déterministe, sans clé, illimité. La Visibilité (qui coûte de vrais appels
-  d'API) est une couche séparée.
-- **Honnêteté comme argument.** Chaque donnée est étiquetée *mesuré*, *observé*,
-  *déduit* ou *recommandé*. La citabilité repose sur des signaux sémantiques, pas
-  sur une règle « 134-167 mots ».
+- **A real engine, not a pile of Markdown files.** All the logic lives in a
+  Python package (`citerank/`), independent of any interface. The CLI, the Claude
+  Code skill, a future REST API and a SaaS are just skins over that core. This is
+  what lets it grow from a terminal tool into a hosted product without rewriting
+  the analysis.
+- **Readiness ≠ Visibility.** A perfectly prepared site isn't necessarily cited.
+  The two are never conflated — not in the scores, not in the reports.
+- **The free layer is local.** The Readiness audit makes no LLM calls:
+  deterministic, no key, unlimited. Visibility (which costs real API calls) is a
+  separate layer.
+- **Honesty as a feature.** Every data point is labeled *measured*, *observed*,
+  *inferred* or *recommended*. Citability rests on semantic signals, not a
+  "134–167 words" rule.
 
-## Installation
+## Install
 
 ```bash
-git clone <repo> && cd citerank
+git clone https://github.com/bruceleeFR/citerank && cd citerank
 pip install -e .
 citerank doctor
 ```
 
-Dépendances minimales : `aiohttp`, `beautifulsoup4`. Python 3.10+.
+Minimal dependencies: `aiohttp`, `beautifulsoup4`. Python 3.10+.
 
-## Premier audit (gratuit, hors ligne)
+## First audit (free, offline)
 
 ```bash
-citerank audit https://votresite.fr
+citerank audit https://yoursite.com
 ```
 
 ```
-  CiteRank · votresite.fr
+  CiteRank · yoursite.com
   ──────────────────────────────────────────────
-  Score global IA-Search : 50/100
+  Overall AI-Search score : 50/100
 
-  Préparation IA (Readiness)   ██████████··········  54  [MESURÉ]
-  SEO technique                ████████████████████ 100  [MESURÉ]
-  Données structurées          ████················  20  [MESURÉ]
-  Citabilité                   ██··················  14  [DÉDUIT]
+  AI Readiness              ██████████··········  54  [MEASURED]
+  Technical SEO             ████████████████████ 100  [MEASURED]
+  Structured data           ████················  20  [MEASURED]
+  Citability                ██··················  14  [INFERRED]
 
-  1 problème(s) prioritaire(s) :
-    🟠 Schéma Organization absent
+  1 priority issue(s):
+    🟠 Organization schema missing
 ```
 
-Rapport détaillé : `citerank audit <url> --md rapport.md`
-Sortie machine : `citerank audit <url> --json`
+Detailed report: `citerank audit <url> --md report.md`
+Machine output: `citerank audit <url> --json`
+Shareable HTML: `citerank report <url> --with competitor.com`
 
-## Mesurer la visibilité réelle (nécessite une clé)
+## Measure real visibility (needs a key)
 
 ```bash
 export OPENAI_API_KEY=sk-...
-citerank visibility https://votresite.fr --brand "Votre Marque" --runs 3
+export ANTHROPIC_API_KEY=sk-ant-...
+citerank visibility https://yoursite.com --brand "Your Brand" --runs 3
 ```
 
-Sans clé, `--mock` démontre le parcours hors ligne (résultats explicitement
-étiquetés factices).
+Without a key, `--mock` demonstrates the flow offline (results are explicitly
+labeled fake). With two providers, consensus across engines becomes meaningful.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `audit` | Readiness audit (local, free) |
+| `competitors` | Readiness comparison vs competitors + "why they win" |
+| `visibility` | Real AI visibility (needs an API key) |
+| `share-of-voice` | AI share of voice across brands |
+| `fix` | Generate fixes (JSON-LD, llms.txt, meta) — never fabricates facts |
+| `report` | Standalone, shareable HTML report |
+| `init` / `monitor` / `compare` | Project mode: dated snapshots, regression detection |
+| `serve` | REST API (the SaaS seam) |
+| `doctor` | Check the environment |
 
 ## Architecture
 
 ```
-        ┌─ Skill Claude Code ─┐
+        ┌─ Claude Code skill ─┐
         ├─ CLI ───────────────┤
-        ├─ API REST (à venir) ─┤──► citerank/ (MOTEUR)
-        ├─ SaaS ──────────────┤        ├─ crawl.py     (crawl normalisé + anti-SSRF)
-        └─ Jarvis ────────────┘        ├─ analyzers/   (technique, schéma, citabilité)
-                                       ├─ providers/   (OpenAI, … adaptateurs)
-                                       ├─ visibility.py (consensus multi-moteurs)
-                                       ├─ scoring       (multi-score transparent)
-                                       └─ report.py     (md / json)
+        ├─ REST API ──────────┤──► citerank/ (ENGINE)
+        ├─ SaaS ──────────────┤        ├─ crawl.py      (normalized crawl + anti-SSRF)
+        └─ Jarvis ────────────┘        ├─ analyzers/    (technical, schema, citability)
+                                       ├─ providers/    (OpenAI, Anthropic … adapters)
+                                       ├─ visibility.py (multi-provider consensus)
+                                       ├─ scoring       (transparent multi-score)
+                                       └─ report*.py    (md / json / html)
 ```
 
-Le moteur ne dépend d'aucune interface. C'est le principe directeur.
+The engine depends on no interface. That's the guiding principle.
 
-## État
+## Editions
 
-Phase 1 livrée : moteur, Readiness locale complète (technique, données
-structurées, citabilité sémantique), abstraction de fournisseurs, Visibilité
-fonctionnelle via OpenAI, rapports Markdown/JSON, tests hors réseau.
+The free/paid line falls exactly on the Readiness/Visibility boundary — which is
+also the local/expensive boundary. See [`docs/EDITIONS.md`](docs/EDITIONS.md).
 
-Feuille de route : Share of Voice, intelligence concurrentielle, moteur de
-remédiation (`/geo fix`), monitoring historique, rapport PDF, adaptateurs Gemini
-et Perplexity. Voir `docs/V2_ARCHITECTURE_PROPOSAL.md`.
+## License
 
-## Licence
-
-MIT. Inspiré de [geo-seo-claude](https://github.com/zubair-trabzada/geo-seo-claude) ;
-voir `NOTICE.md` pour l'attribution.
+MIT. Inspired by [geo-seo-claude](https://github.com/zubair-trabzada/geo-seo-claude);
+see [`NOTICE.md`](NOTICE.md) for attribution.

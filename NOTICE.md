@@ -1,28 +1,30 @@
 # Attribution
 
-CiteRank s'inspire de **[geo-seo-claude](https://github.com/zubair-trabzada/geo-seo-claude)**
-de zubair-trabzada, publié sous licence MIT.
+CiteRank is inspired by **[geo-seo-claude](https://github.com/zubair-trabzada/geo-seo-claude)**
+by zubair-trabzada, released under the MIT License.
 
-## Ce qui est repris et ce qui ne l'est pas
+## What is reused, and what is not
 
-CiteRank est une **réécriture**, pas un fork. Aucun fichier du projet amont n'a
-été copié tel quel. Ce qui est hérité, ce sont des **idées** — la notion d'audit
-GEO, la palette de commandes (`audit`, `citability`, `schema`, `crawlers`,
-`llmstxt`…), l'orientation « visibilité IA plutôt que Google ».
+CiteRank is a **rewrite**, not a fork. No file from the upstream project was
+copied verbatim. What is inherited are **ideas** — the notion of a GEO audit, the
+command palette (`audit`, `citability`, `schema`, `crawlers`, `llmstxt`…), the
+"AI visibility over Google" framing.
 
-Ce qui est **nouveau et différent** :
+What is **new and different**:
 
-- un **moteur Python indépendant** de toute interface, là où l'amont fait vivre
-  sa logique dans des skills Markdown de Claude Code (le CLI, le skill, une API
-  et un SaaS ne sont ici que des peaux sur le même cœur) ;
-- la **séparation stricte** entre préparation (Readiness), visibilité réelle
-  (Visibility) et part de voix (Share of Voice) — l'amont mélange les trois ;
-- une **citabilité sémantique** en remplacement de la règle « 134-167 mots » du
-  projet d'origine, que son propre README érige en seuil universel ;
-- l'**étiquetage de la nature** de chaque donnée (mesuré / observé / déduit /
-  recommandé), pour ne jamais présenter une déduction comme un fait ;
-- la **validation d'URL anti-SSRF** dès l'entrée du crawl.
+- a **Python engine independent of any interface**, where the upstream keeps its
+  logic in Claude Code Markdown skills (here the CLI, the skill, an API and a
+  SaaS are all just skins over the same core);
+- a **strict separation** between readiness, real visibility and share of voice —
+  the upstream mixes the three;
+- **semantic citability** replacing the upstream's "134–167 words" rule, which its
+  own README elevates into a universal threshold;
+- **labeling the nature** of every data point (measured / observed / inferred /
+  recommended), so an inference is never shown as a fact;
+- **anti-SSRF URL validation** at the crawl boundary.
 
-Conformément à la licence MIT, la notice de copyright amont est conservée dans
-le fichier `LICENSE`. CiteRank ne prétend pas être l'auteur original de l'idée
-d'outil GEO pour Claude Code.
+Per the MIT License, the upstream copyright notice is preserved. CiteRank does
+not claim to be the original author of the idea of a GEO tool for Claude Code.
+
+Copyright (c) 2025 zubair-trabzada — upstream `geo-seo-claude` (MIT).
+Copyright (c) 2026 LAMARCA and CiteRank contributors.

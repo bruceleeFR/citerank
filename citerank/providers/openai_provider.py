@@ -1,10 +1,10 @@
 """
-Adaptateur OpenAI / compatible (ChatGPT).
+OpenAI / compatible (ChatGPT) adapter.
 
-Fonctionnel dès qu'OPENAI_API_KEY est présent. Compatible avec tout endpoint au
-format OpenAI (OpenRouter, groupes locaux) via OPENAI_BASE_URL. Aucune clé n'est
-journalisée. Le fournisseur ne lève jamais : toute erreur devient un
-ProviderResult vide, pour ne pas casser le consensus.
+Works as soon as OPENAI_API_KEY is present. Compatible with any OpenAI-format
+endpoint (OpenRouter, local clusters) via OPENAI_BASE_URL. No key is logged. The
+provider never raises: any error becomes an empty ProviderResult, so it doesn't
+break the consensus.
 """
 
 from __future__ import annotations
@@ -15,9 +15,8 @@ from ..models import ProviderResult
 from .base import Provider
 
 _INSTRUCTION = (
-    "Réponds à la question de l'utilisateur comme un assistant grand public, en "
-    "citant les entreprises ou produits pertinents et leurs sites quand tu les "
-    "connais. Sois concret."
+    "Answer the user's question like a consumer assistant, naming the relevant "
+    "companies or products and their websites when you know them. Be concrete."
 )
 
 
@@ -29,8 +28,8 @@ class OpenAIProvider(Provider):
         self.model = model or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
         self.base = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
-    async def interroger(self, query: str, *, marque: str, domaine: str,
-                         session) -> ProviderResult:
+    async def query(self, query: str, *, brand: str, domain: str,
+                    session) -> ProviderResult:
         try:
             async with session.post(
                 f"{self.base}/chat/completions",
@@ -45,14 +44,14 @@ class OpenAIProvider(Provider):
                 },
             ) as r:
                 if r.status != 200:
-                    return self._vide(query, f"HTTP {r.status}")
+                    return self._empty(query, f"HTTP {r.status}")
                 data = await r.json()
-                texte = data["choices"][0]["message"]["content"]
-        except Exception as e:  # réseau, JSON, clé absente : on ne casse rien
-            return self._vide(query, str(e)[:80])
-        return self._analyser_reponse(texte, marque, domaine, query, self.name)
+                text = data["choices"][0]["message"]["content"]
+        except Exception as e:  # network, JSON, missing key: break nothing
+            return self._empty(query, str(e)[:80])
+        return self._analyze_response(text, brand, domain, query, self.name)
 
-    def _vide(self, query: str, motif: str) -> ProviderResult:
+    def _empty(self, query: str, reason: str) -> ProviderResult:
         return ProviderResult(provider=self.name, query=query, brand_mentioned=False,
                               brand_recommended=False, domain_cited=False,
-                              raw_excerpt=f"[erreur {self.name}: {motif}]")
+                              raw_excerpt=f"[{self.name} error: {reason}]")

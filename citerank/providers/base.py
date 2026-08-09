@@ -1,13 +1,13 @@
 """
-Abstraction de fournisseur IA.
+AI provider abstraction.
 
-Faiblesse n°3 du cahier des charges : ne JAMAIS coder en dur la logique d'un
-fournisseur dans tout le code. Chaque moteur (OpenAI, Anthropic, Gemini,
-Perplexity, OpenRouter) est un adaptateur qui implémente cette interface. Le
-moteur de visibilité ne connaît que `Provider`, jamais un fournisseur précis.
+Spec weakness #3: NEVER hardcode a provider's logic across the codebase. Each
+engine (OpenAI, Anthropic, Gemini, Perplexity, OpenRouter) is an adapter that
+implements this interface. The visibility engine only knows `Provider`, never a
+specific provider.
 
-Les clés viennent EXCLUSIVEMENT de l'environnement (point 31) — jamais du code,
-jamais des journaux.
+Keys come EXCLUSIVELY from the environment (point 31) — never from code, never
+from logs.
 """
 
 from __future__ import annotations
@@ -19,57 +19,56 @@ from ..models import ProviderResult
 
 
 class Provider(abc.ABC):
-    """Contrat commun à tous les moteurs IA interrogés."""
+    """Common contract for every queried AI engine."""
 
-    #: nom court, sert de clé dans les résultats
+    #: short name, used as the key in results
     name: str = "base"
-    #: variable d'environnement portant la clé
+    #: environment variable holding the key
     env_key: str = ""
 
-    def disponible(self) -> bool:
-        """Un fournisseur est disponible si sa clé est présente dans l'environnement."""
+    def available(self) -> bool:
+        """A provider is available if its key is present in the environment."""
         return bool(self.env_key and os.environ.get(self.env_key))
 
     @abc.abstractmethod
-    async def interroger(self, query: str, *, marque: str, domaine: str,
-                         session) -> ProviderResult:
+    async def query(self, query: str, *, brand: str, domain: str,
+                    session) -> ProviderResult:
         """
-        Pose `query` au moteur et analyse la réponse pour dire si la marque est
-        mentionnée, recommandée, citée, à quel rang, et face à quels concurrents.
-        Retourne toujours un ProviderResult — jamais d'exception qui remonte :
-        un fournisseur en panne ne doit pas casser le consensus.
+        Ask `query` to the engine and analyze the answer for whether the brand is
+        mentioned, recommended, cited, at what rank, and against which
+        competitors. Always returns a ProviderResult — never raises: a provider
+        outage must not break the consensus.
         """
         raise NotImplementedError
 
-    # -- Analyse partagée de la réponse ------------------------------------
+    # -- Shared answer analysis --------------------------------------------
     @staticmethod
-    def _analyser_reponse(texte: str, marque: str, domaine: str,
+    def _analyze_response(text: str, brand: str, domain: str,
                           query: str, provider: str) -> ProviderResult:
         """
-        Extraction commune : présente-t-elle la marque, le domaine, à quel rang.
-        Volontairement simple et transparente — on préfère une heuristique
-        lisible et honnête à une boîte noire qui gonflerait les chiffres.
+        Shared extraction: does the answer contain the brand, the domain, at what
+        rank. Deliberately simple and transparent — we prefer a readable, honest
+        heuristic over a black box that would inflate the numbers.
         """
-        bas = texte.lower()
-        m = marque.lower()
-        d = domaine.lower().removeprefix("www.")
+        low = text.lower()
+        b = brand.lower()
+        d = domain.lower().removeprefix("www.")
 
-        mentionnee = bool(m) and m in bas
-        cite = d in bas
-        # « recommandé » : la marque apparaît dans une tournure de recommandation.
-        recommande = mentionnee and any(
-            motif in bas for motif in (
-                f"recommande {m}", f"recommend {m}", f"{m} est un bon",
-                f"{m} is a good", f"utilisez {m}", f"use {m}", f"try {m}",
-                f"best option is {m}", f"i'd suggest {m}",
+        mentioned = bool(b) and b in low
+        cited = d in low
+        # "recommended": the brand appears in a recommendation phrasing.
+        recommended = mentioned and any(
+            pattern in low for pattern in (
+                f"recommend {b}", f"i recommend {b}", f"{b} is a good",
+                f"use {b}", f"try {b}", f"best option is {b}", f"i'd suggest {b}",
             )
         )
-        position = bas.find(m) if mentionnee else None
+        position = low.find(b) if mentioned else None
         return ProviderResult(
             provider=provider, query=query,
-            brand_mentioned=mentionnee, brand_recommended=recommande,
-            domain_cited=cite,
-            citation_url=domaine if cite else "",
+            brand_mentioned=mentioned, brand_recommended=recommended,
+            domain_cited=cited,
+            citation_url=domain if cited else "",
             position=position,
-            raw_excerpt=texte[:400],
+            raw_excerpt=text[:400],
         )

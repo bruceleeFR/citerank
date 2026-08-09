@@ -1,16 +1,16 @@
 """
-Intelligence concurrentielle — le cœur de l'avantage de CiteRank.
+Competitive intelligence — the heart of CiteRank's edge.
 
-Deux questions que l'outil amont ne pose pas :
+Two questions the upstream tool doesn't ask:
 
-  1. Où mon site perd-il des points face à un concurrent ? (comparaison de
-     Readiness, 100 % locale, déterministe, sans clé API)
-  2. Pourquoi un concurrent est-il cité à ma place dans les réponses IA ?
-     (Share of Voice, nécessite des fournisseurs LLM)
+  1. Where does my site lose points against a competitor? (Readiness comparison,
+     100% local, deterministic, no API key)
+  2. Why is a competitor cited instead of me in AI answers? (Share of Voice,
+     needs LLM providers)
 
-Le module ne fabrique jamais un « pourquoi » : chaque explication est adossée à
-un écart de score mesuré ou à un taux de citation observé. Une affirmation sans
-preuve n'a pas sa place ici (point 25).
+The module never fabricates a "why": every explanation is backed by a measured
+score gap or an observed citation rate. A claim without evidence has no place
+here (point 25).
 """
 
 from __future__ import annotations
@@ -24,130 +24,127 @@ from .providers import Provider
 
 
 @dataclass
-class Comparaison:
-    cible: SiteAudit
-    concurrents: list[SiteAudit] = field(default_factory=list)
+class Comparison:
+    target: SiteAudit
+    competitors: list[SiteAudit] = field(default_factory=list)
 
-    def tableau(self) -> list[dict]:
-        """Une ligne par site, une colonne par score. Exploitable en JSON ou en Markdown."""
-        cles = ["readiness", "technical", "schema", "citability"]
-        lignes = []
-        for a in [self.cible, *self.concurrents]:
-            ligne = {"domaine": a.domain, "global": a.overall()}
-            for k in cles:
+    def table(self) -> list[dict]:
+        """One row per site, one column per score. Usable as JSON or Markdown."""
+        keys = ["readiness", "technical", "schema", "citability"]
+        rows = []
+        for a in [self.target, *self.competitors]:
+            row = {"domain": a.domain, "overall": a.overall()}
+            for k in keys:
                 s = a.score(k)
-                ligne[k] = round(s.value, 0) if s else None
-            lignes.append(ligne)
-        return lignes
+                row[k] = round(s.value, 0) if s else None
+            rows.append(row)
+        return rows
 
-    def rang_cible(self) -> tuple[int, int]:
-        """Position de la cible (1 = tête) et nombre total de sites comparés."""
-        classement = sorted([self.cible, *self.concurrents],
-                            key=lambda a: a.overall(), reverse=True)
-        rang = next(i for i, a in enumerate(classement, 1)
-                    if a.domain == self.cible.domain)
-        return rang, len(classement)
+    def target_rank(self) -> tuple[int, int]:
+        """The target's position (1 = top) and the total number of sites compared."""
+        ranking = sorted([self.target, *self.competitors],
+                         key=lambda a: a.overall(), reverse=True)
+        rank = next(i for i, a in enumerate(ranking, 1)
+                    if a.domain == self.target.domain)
+        return rank, len(ranking)
 
 
-async def comparer(cible_url: str, concurrents_url: list[str], *,
-                   autoriser_local: bool = False) -> Comparaison:
-    """Audite la cible et ses concurrents en parallèle, puis assemble la comparaison."""
-    urls = [cible_url, *concurrents_url]
+async def compare(target_url: str, competitor_urls: list[str], *,
+                  allow_local: bool = False) -> Comparison:
+    """Audit the target and its competitors in parallel, then assemble the comparison."""
+    urls = [target_url, *competitor_urls]
     audits = await asyncio.gather(*[
-        engine.audit(u, autoriser_local=autoriser_local) for u in urls
+        engine.audit(u, allow_local=allow_local) for u in urls
     ])
-    return Comparaison(cible=audits[0], concurrents=list(audits[1:]))
+    return Comparison(target=audits[0], competitors=list(audits[1:]))
 
 
-def expliquer_ecart(comp: Comparaison) -> list[str]:
+def explain_gap(comp: Comparison) -> list[str]:
     """
-    « Pourquoi ils passent devant » — uniquement à partir d'écarts mesurés.
-    Chaque phrase cite le score, le concurrent et la différence. Aucune supposition.
+    "Why they win" — only from measured gaps. Each sentence cites the score, the
+    competitor and the difference. No guessing.
     """
-    raisons: list[str] = []
-    cible = comp.cible
-    axes = [("schema", "données structurées"), ("citability", "citabilité"),
-            ("technical", "SEO technique"), ("readiness", "préparation globale")]
+    reasons: list[str] = []
+    target = comp.target
+    axes = [("schema", "structured data"), ("citability", "citability"),
+            ("technical", "technical SEO"), ("readiness", "overall readiness")]
 
-    for cle, label in axes:
-        s_cible = cible.score(cle)
-        if not s_cible:
+    for key, label in axes:
+        s_target = target.score(key)
+        if not s_target:
             continue
-        # Le meilleur concurrent sur cet axe.
-        meilleurs = sorted(
-            [(c, c.score(cle)) for c in comp.concurrents if c.score(cle)],
+        # The best competitor on this axis.
+        best = sorted(
+            [(c, c.score(key)) for c in comp.competitors if c.score(key)],
             key=lambda t: t[1].value, reverse=True)
-        if not meilleurs:
+        if not best:
             continue
-        concurrent, s_conc = meilleurs[0]
-        ecart = s_conc.value - s_cible.value
-        if ecart >= 12:  # seuil : on ne commente que les écarts qui comptent
-            nat = "" if s_cible.nature == Nature.MEASURED else f" ({s_cible.nature.value})"
-            raisons.append(
-                f"**{label}{nat}** : {concurrent.domain} obtient "
-                f"{s_conc.value:.0f}/100 contre {s_cible.value:.0f} pour {cible.domain} "
-                f"(écart de {ecart:.0f} points)."
+        competitor, s_comp = best[0]
+        gap = s_comp.value - s_target.value
+        if gap >= 12:  # threshold: only comment on gaps that matter
+            nat = "" if s_target.nature == Nature.MEASURED else f" ({s_target.nature.value})"
+            reasons.append(
+                f"**{label}{nat}**: {competitor.domain} scores "
+                f"{s_comp.value:.0f}/100 vs {s_target.value:.0f} for {target.domain} "
+                f"(a {gap:.0f}-point gap)."
             )
 
-    # Constats critiques présents chez la cible mais absents chez le meneur.
+    # Critical findings present on the target but absent on the leader.
     from .models import Severity
-    ids_cible = {f.id for f in cible.findings
-                 if f.severity in (Severity.CRITICAL, Severity.HIGH)}
-    meneur = max(comp.concurrents, key=lambda a: a.overall(), default=None)
-    if meneur:
-        ids_meneur = {f.id for f in meneur.findings}
-        propres_a_cible = ids_cible - ids_meneur
-        for f in cible.findings:
-            if f.id in propres_a_cible:
-                raisons.append(
-                    f"**{f.title}** vous pénalise et pas {meneur.domain} — {f.recommendation}")
+    target_ids = {f.id for f in target.findings
+                  if f.severity in (Severity.CRITICAL, Severity.HIGH)}
+    leader = max(comp.competitors, key=lambda a: a.overall(), default=None)
+    if leader:
+        leader_ids = {f.id for f in leader.findings}
+        target_only = target_ids - leader_ids
+        for f in target.findings:
+            if f.id in target_only:
+                reasons.append(
+                    f"**{f.title}** penalizes you but not {leader.domain} — {f.recommendation}")
 
-    if not raisons:
-        raisons.append("Aucun écart significatif : la cible tient la comparaison sur "
-                       "les axes mesurés. L'écart, s'il existe, se joue sur la "
-                       "visibilité réelle — voir le Share of Voice.")
-    return raisons
+    if not reasons:
+        reasons.append("No significant gap: the target holds up on the measured axes. "
+                       "Any gap that exists plays out on real visibility — see Share of Voice.")
+    return reasons
 
 
-# --- Share of Voice (nécessite des fournisseurs) -----------------------------
+# --- Share of Voice (needs providers) ----------------------------------------
 
-async def share_of_voice(marques: list[tuple[str, str]], queries: list[str], *,
+async def share_of_voice(brands: list[tuple[str, str]], queries: list[str], *,
                          providers: list[Provider] | None = None,
                          runs: int = 1) -> dict:
     """
-    Part de voix IA entre plusieurs marques sur un même jeu de requêtes.
+    AI share of voice between several brands over the same query set.
 
-    `marques` : liste de (nom, domaine). La première est la cible.
-    Retourne un dict typé avec, par marque : taux de mention, de recommandation,
-    de citation — et la désignation des gagnants et des opportunités.
+    `brands`: list of (name, domain). The first is the target.
+    Returns a typed dict with, per brand: mention, recommendation and citation
+    rate — and the ranking with the target's position.
     """
-    resultats = {}
-    for nom, domaine in marques:
-        vr = await visibility.mesurer(queries, marque=nom, domaine=domaine,
+    results = {}
+    for name, domain in brands:
+        vr = await visibility.measure(queries, brand=name, domain=domain,
                                       providers=providers, runs=runs)
-        s = visibility.score_visibilite(vr)
-        resultats[nom] = s
+        results[name] = visibility.visibility_score(vr)
 
-    mesures = [(n, s) for n, s in resultats.items() if s.get("score") is not None]
-    if not mesures:
-        return {"mesuré": False,
-                "raison": "aucun fournisseur IA disponible",
-                "marques": resultats}
+    measured = [(n, s) for n, s in results.items() if s.get("score") is not None]
+    if not measured:
+        return {"measured": False,
+                "reason": "no AI provider available",
+                "brands": results}
 
-    classement = sorted(mesures, key=lambda t: t[1]["score"], reverse=True)
-    cible_nom = marques[0][0]
-    factice = any(s.get("mesuré") is False and s.get("score") is not None
-                  for _, s in mesures)
+    ranking = sorted(measured, key=lambda t: t[1]["score"], reverse=True)
+    target_name = brands[0][0]
+    fake = any(s.get("measured") is False and s.get("score") is not None
+               for _, s in measured)
 
     return {
-        "mesuré": not factice,
-        "classement": [{"marque": n, "score": s["score"],
-                        "recommandation": s["taux_recommandation"],
-                        "citation": s["taux_citation"]} for n, s in classement],
-        "cible": cible_nom,
-        "rang_cible": next(i for i, (n, _) in enumerate(classement, 1) if n == cible_nom),
-        "total": len(classement),
-        "avertissement": ("Résultats FACTICES (MockProvider)." if factice else
-                          "Échantillon sur le jeu de requêtes fourni ; sensible à la "
-                          "variabilité des moteurs."),
+        "measured": not fake,
+        "ranking": [{"brand": n, "score": s["score"],
+                     "recommendation": s["recommendation_rate"],
+                     "citation": s["citation_rate"]} for n, s in ranking],
+        "target": target_name,
+        "target_rank": next(i for i, (n, _) in enumerate(ranking, 1) if n == target_name),
+        "total": len(ranking),
+        "warning": ("FAKE results (MockProvider)." if fake else
+                    "Sample over the provided query set; sensitive to engine variability."),
     }

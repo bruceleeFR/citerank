@@ -1,14 +1,14 @@
 """
-Modèles de données typés du moteur.
+Typed data models for the engine.
 
-Raison d'être : le projet amont fait circuler de gros blocs Markdown entre ses
-composants (point faible n°24 du cahier des charges). Ici, tout ce qui traverse
-le moteur est un objet typé. Le Markdown n'apparaît qu'au tout dernier moment,
-dans le générateur de rapport — jamais comme structure d'échange interne.
+Reason to exist: the upstream project passes large Markdown blobs between its
+components. Here, everything that flows through the engine is a typed object.
+Markdown only appears at the very end, in the report generator — never as an
+internal exchange format.
 
-Aucune dépendance : dataclasses de la bibliothèque standard. Pydantic serait un
-luxe ; le typage statique et la sérialisation JSON manuelle suffisent, et gardent
-le moteur installable sans arbre de dépendances.
+No dependencies: standard-library dataclasses. Pydantic would be a luxury; static
+typing plus manual JSON serialization is enough, and keeps the engine installable
+without a dependency tree.
 """
 
 from __future__ import annotations
@@ -29,13 +29,13 @@ class Severity(str, Enum):
 
 class Nature(str, Enum):
     """
-    Distinction cardinale du produit (point 18) : on ne présente jamais une
-    déduction comme une mesure. Chaque donnée porte sa nature.
+    The product's cardinal distinction (point 18): never present an inference as
+    a measurement. Every data point carries its nature.
 
-      MEASURED  — relevé directement (un en-tête HTTP, un bloc JSON-LD présent).
-      OBSERVED  — constaté sur la page (une FAQ existe, un H1 est là).
-      INFERRED  — estimé par heuristique (« ce passage est citable »).
-      RECOMMENDED — action proposée, pas un fait.
+      MEASURED   — read directly (an HTTP header, a JSON-LD block present).
+      OBSERVED   — seen on the page (a FAQ exists, an H1 is there).
+      INFERRED   — estimated by heuristic ("this passage is citable").
+      RECOMMENDED — a proposed action, not a fact.
     """
     MEASURED = "measured"
     OBSERVED = "observed"
@@ -46,8 +46,8 @@ class Nature(str, Enum):
 @dataclass
 class Finding:
     """
-    Un constat unitaire. Le système de preuve (point 25) impose que chaque
-    constat porte sa source, sa sévérité, sa confiance et son action.
+    A single finding. The evidence system (point 25) requires every finding to
+    carry its source, severity, confidence and action.
     """
     id: str
     title: str
@@ -55,10 +55,10 @@ class Finding:
     nature: Nature
     confidence: float           # 0.0 → 1.0
     category: str
-    source: str                 # URL ou emplacement exact
+    source: str                 # exact URL or location
     detail: str = ""
     recommendation: str = ""
-    evidence: str = ""          # extrait brut qui justifie le constat
+    evidence: str = ""          # raw excerpt that justifies the finding
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -69,11 +69,11 @@ class Finding:
 
 @dataclass
 class ScoreComponent:
-    """Une brique d'un score. C'est ce qui rend la note transparente (point 2)."""
+    """One brick of a score. This is what makes a score transparent (point 2)."""
     key: str
     label: str
-    points: float               # points obtenus
-    max_points: float           # points possibles
+    points: float               # points earned
+    max_points: float           # points possible
     nature: Nature
     detail: str = ""
 
@@ -85,10 +85,10 @@ class ScoreComponent:
 @dataclass
 class Score:
     """
-    Un score sur 100, jamais un nombre nu : il porte ses composantes, sa
-    méthode et son niveau de confiance. Un score de Readiness (mesuré) et un
-    score de Visibility (échantillonné) n'ont pas la même autorité, et le dire
-    est un argument de crédibilité, pas un aveu de faiblesse (point 30).
+    A score out of 100 — never a bare number: it carries its components, its
+    method and its confidence. A Readiness score (measured) and a Visibility
+    score (sampled) don't have the same authority, and saying so is a credibility
+    argument, not an admission of weakness (point 30).
     """
     key: str
     label: str
@@ -120,9 +120,9 @@ class Score:
 @dataclass
 class CrawledPage:
     """
-    Représentation normalisée d'une page, produite UNE fois et partagée par tous
-    les analyseurs (point 23). Sans elle, chaque analyseur retéléchargerait la
-    même page — le défaut exact que le cahier des charges pointe.
+    Normalized representation of a page, produced ONCE and shared by every
+    analyzer (point 23). Without it, each analyzer would refetch the same page —
+    the exact defect the spec points out.
     """
     url: str
     status: int
@@ -130,12 +130,12 @@ class CrawledPage:
     fetched_at: str
     headers: dict[str, str]
     html: str
-    text: str                            # texte visible extrait
+    text: str                            # extracted visible text
     title: str = ""
     meta_description: str = ""
     lang: str = ""
     h1: list[str] = field(default_factory=list)
-    headings: list[tuple[int, str]] = field(default_factory=list)  # (niveau, texte)
+    headings: list[tuple[int, str]] = field(default_factory=list)  # (level, text)
     json_ld: list[dict] = field(default_factory=list)
     links_internal: list[str] = field(default_factory=list)
     links_external: list[str] = field(default_factory=list)
@@ -148,7 +148,7 @@ class CrawledPage:
 
 @dataclass
 class SiteContext:
-    """Ce qu'on sait de l'entité avant d'interroger un moteur IA."""
+    """What we know about the entity before querying an AI engine."""
     url: str
     domain: str
     brand: str = ""
@@ -159,7 +159,7 @@ class SiteContext:
 
 @dataclass
 class SiteAudit:
-    """Le résultat complet d'un audit. C'est ce que sérialise le moteur."""
+    """The complete result of an audit. This is what the engine serializes."""
     url: str
     domain: str
     started_at: str
@@ -173,19 +173,19 @@ class SiteAudit:
 
     def overall(self) -> float:
         """
-        Score global : moyenne pondérée des scores disponibles. Volontairement
-        conservateur — un score absent ne compte pas comme un zéro (ce qui
-        punirait un audit local qui n'a pas lancé la visibilité), il est retiré
-        du dénominateur.
+        Overall score: weighted average of available scores. Deliberately
+        conservative — a missing score does not count as a zero (which would
+        punish a local audit that didn't run visibility); it is dropped from the
+        denominator.
         """
-        poids = {
+        weights = {
             "readiness": 0.25, "technical": 0.15, "schema": 0.10,
             "citability": 0.15, "content": 0.10, "entity": 0.10,
             "visibility": 0.15,
         }
         num = den = 0.0
         for s in self.scores:
-            w = poids.get(s.key, 0.0)
+            w = weights.get(s.key, 0.0)
             if w:
                 num += s.value * w
                 den += w
@@ -203,20 +203,20 @@ class SiteAudit:
         }
 
 
-# --- Modèles de la couche Visibilité (échantillonnée, non déterministe) ------
+# --- Visibility-layer models (sampled, non-deterministic) --------------------
 
 @dataclass
 class ProviderResult:
-    """Réponse d'UN moteur IA à UNE requête, sur UN passage."""
+    """One AI engine's answer to one query, for one brand."""
     provider: str
     query: str
     brand_mentioned: bool
     brand_recommended: bool
     domain_cited: bool
     citation_url: str = ""
-    position: int | None = None          # rang d'apparition de la marque
+    position: int | None = None          # rank at which the brand appears
     competitors: list[str] = field(default_factory=list)
-    sentiment: str = ""                  # positif / neutre / négatif
+    sentiment: str = ""                  # positive / neutral / negative
     raw_excerpt: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -225,7 +225,7 @@ class ProviderResult:
 
 @dataclass
 class VisibilityResult:
-    """Consensus multi-fournisseurs pour une requête (point 13)."""
+    """Multi-provider consensus for one query (point 13)."""
     query: str
     runs: list[ProviderResult] = field(default_factory=list)
 
@@ -247,9 +247,9 @@ class VisibilityResult:
     @property
     def confidence(self) -> str:
         """
-        La confiance vient de la CONSTANCE entre exécutions et fournisseurs.
-        Une marque citée 9 fois sur 10 est un fait ; 5 sur 10 est un doute. On
-        le dit, on ne le lisse pas (point 13).
+        Confidence comes from CONSISTENCY across runs and providers. A brand
+        mentioned 9 times out of 10 is a fact; 5 out of 10 is a doubt. We say so,
+        we don't smooth it over (point 13).
         """
         if not self.runs:
             return "none"

@@ -1,16 +1,16 @@
 """
-Tests du cœur, sans réseau (point 26). Le crawl est simulé par une CrawledPage
-fabriquée à la main ; les fournisseurs par le MockProvider. Aucun test unitaire
-ne dépend d'Internet.
+Core tests, no network (point 26). The crawl is simulated with a hand-built
+CrawledPage; providers with the MockProvider. No unit test depends on the
+internet.
 """
 
 import asyncio
 
-from citerank.models import CrawledPage, Nature, now_iso
-from citerank.analyzers import schema_ld, citability
-from citerank.crawl import valider_url
-from citerank.providers import MockProvider
 from citerank import visibility
+from citerank.analyzers import citability, schema_ld
+from citerank.crawl import validate_url
+from citerank.models import CrawledPage, Nature, now_iso
+from citerank.providers import MockProvider
 
 
 def _page(**kw) -> CrawledPage:
@@ -21,101 +21,98 @@ def _page(**kw) -> CrawledPage:
     return CrawledPage(**base)
 
 
-def test_validation_url_bloque_interne():
-    for mauvais in ["http://localhost/", "http://127.0.0.1/", "http://169.254.169.254/"]:
+def test_validate_url_blocks_internal():
+    for bad in ["http://localhost/", "http://127.0.0.1/", "http://169.254.169.254/"]:
         try:
-            valider_url(mauvais)
+            validate_url(bad)
         except ValueError:
             continue
-        raise AssertionError(f"{mauvais} aurait dû être bloqué")
+        raise AssertionError(f"{bad} should have been blocked")
 
 
-def test_validation_url_accepte_public():
-    assert valider_url("example.com").startswith("https://example.com")
+def test_validate_url_accepts_public():
+    assert validate_url("example.com").startswith("https://example.com")
 
 
-def test_schema_detecte_organization():
+def test_schema_detects_organization():
     page = _page(json_ld=[{"@type": "Organization", "name": "Acme", "sameAs": ["x"]}])
-    score, findings = schema_ld.analyser(page)
+    score, findings = schema_ld.analyze(page)
     assert score.value >= 65
     assert not any(f.id == "org-schema-missing" for f in findings)
 
 
-def test_schema_signale_absence():
+def test_schema_flags_absence():
     page = _page(json_ld=[])
-    score, findings = schema_ld.analyser(page)
+    score, findings = schema_ld.analyze(page)
     assert any(f.id == "org-schema-missing" for f in findings)
     assert score.value < 30
 
 
-def test_citabilite_est_deduite_pas_mesuree():
-    page = _page(html="<html><body><h2>Qu'est-ce que X ?</h2>"
-                      "<p>X est un service créé en 2021 qui traite 40% des cas en 3 minutes.</p>"
+def test_citability_is_inferred_not_measured():
+    page = _page(html="<html><body><h2>What is X?</h2>"
+                      "<p>X is a service created in 2021 that handles 40% of cases in 3 minutes.</p>"
                       "</body></html>")
-    score, _ = citability.analyser(page)
-    assert score.nature == Nature.INFERRED  # jamais présenté comme un fait
+    score, _ = citability.analyze(page)
+    assert score.nature == Nature.INFERRED  # never presented as a fact
 
 
-def test_visibilite_sans_fournisseur_est_honnete():
-    res = asyncio.run(visibility.mesurer(["q"], marque="X", domaine="x.test", providers=[]))
-    s = visibility.score_visibilite(res)
-    assert s["mesuré"] is False
+def test_visibility_without_provider_is_honest():
+    res = asyncio.run(visibility.measure(["q"], brand="X", domain="x.test", providers=[]))
+    s = visibility.visibility_score(res)
+    assert s["measured"] is False
     assert s["score"] is None
 
 
-def test_mock_est_marque_factice():
-    res = asyncio.run(visibility.mesurer(["q1", "q2"], marque="X", domaine="x.test",
+def test_mock_is_flagged_fake():
+    res = asyncio.run(visibility.measure(["q1", "q2"], brand="X", domain="x.test",
                                          providers=[MockProvider()]))
-    s = visibility.score_visibilite(res)
-    assert s["mesuré"] is False           # le mock ne compte jamais comme mesuré
-    assert "FACTICES" in s["avertissement"]
+    s = visibility.visibility_score(res)
+    assert s["measured"] is False           # the mock never counts as measured
+    assert "FAKE" in s["warning"]
 
 
-def test_expliquer_ecart_est_adosse_aux_scores():
-    """L'explication concurrentielle ne sort que d'écarts mesurés, jamais du vide."""
-    from citerank.competitive import Comparaison, expliquer_ecart
-    from citerank.models import SiteAudit, Score, Nature
+def test_explain_gap_is_backed_by_scores():
+    """The competitive explanation only comes from measured gaps, never thin air."""
+    from citerank.competitive import Comparison, explain_gap
+    from citerank.models import Score, SiteAudit
 
     def audit(dom, schema_val):
         a = SiteAudit(url=f"https://{dom}", domain=dom, started_at=now_iso())
-        a.scores.append(Score("schema", "Données structurées", schema_val,
-                              Nature.MEASURED, 1.0))
+        a.scores.append(Score("schema", "Structured data", schema_val, Nature.MEASURED, 1.0))
         a.scores.append(Score("readiness", "Readiness", schema_val, Nature.MEASURED, 1.0))
         return a
 
-    comp = Comparaison(cible=audit("moi.test", 20), concurrents=[audit("eux.test", 85)])
-    raisons = expliquer_ecart(comp)
-    assert any("eux.test" in r and "85" in r for r in raisons)
-    rang, total = comp.rang_cible()
-    assert (rang, total) == (2, 2)
+    comp = Comparison(target=audit("me.test", 20), competitors=[audit("them.test", 85)])
+    reasons = explain_gap(comp)
+    assert any("them.test" in r and "85" in r for r in reasons)
+    assert comp.target_rank() == (2, 2)
 
 
-def test_remediation_ne_fabrique_jamais():
-    """Un correctif ne remplit que des faits dérivés ; sameAs vide s'il n'est pas fourni."""
+def test_remediation_never_fabricates():
+    """A fix only fills derived facts; sameAs empty when not provided."""
     import json as _json
     from citerank.remediation import organization_jsonld
-    page = _page(final_url="https://ex.test/", title="Truc génial — Acme",
-                 meta_description="Une vraie description.")
-    fix = organization_jsonld(page, None)          # aucun sameAs fourni
+    page = _page(final_url="https://ex.test/", title="Great thing - Acme",
+                 meta_description="A real description.")
+    fix = organization_jsonld(page, None)          # no sameAs provided
     data = _json.loads(fix.content.split(">", 1)[1].rsplit("<", 1)[0])
-    assert data["name"] == "Acme"                  # dérivé du titre, pas inventé
+    assert data["name"] == "Acme"                  # derived from the title, not invented
     assert data["url"] == "https://ex.test"
-    assert "sameAs" not in data                    # jamais deviné
-    # Fourni explicitement : présent.
+    assert "sameAs" not in data                    # never guessed
     fix2 = organization_jsonld(page, None, same_as=["https://linkedin.com/company/acme"])
     data2 = _json.loads(fix2.content.split(">", 1)[1].rsplit("<", 1)[0])
     assert data2["sameAs"] == ["https://linkedin.com/company/acme"]
 
 
-def test_comparaison_detecte_regression():
-    """La comparaison temporelle repère les baisses, pas seulement les hausses."""
-    from citerank.history import comparer
-    ancien = {"started_at": "2026-08-01", "overall_ai_search_score": 60,
-              "scores": [{"key": "schema", "value": 80}, {"key": "technical", "value": 90}]}
-    nouveau = {"started_at": "2026-08-09", "overall_ai_search_score": 52,
-               "scores": [{"key": "schema", "value": 55}, {"key": "technical", "value": 90}]}
-    d = comparer(ancien, nouveau)
-    assert d["global"]["delta"] == -8
+def test_compare_detects_regression():
+    """The over-time comparison catches drops, not just gains."""
+    from citerank.history import compare
+    old = {"started_at": "2026-08-01", "overall_ai_search_score": 60,
+           "scores": [{"key": "schema", "value": 80}, {"key": "technical", "value": 90}]}
+    new = {"started_at": "2026-08-09", "overall_ai_search_score": 52,
+           "scores": [{"key": "schema", "value": 55}, {"key": "technical", "value": 90}]}
+    d = compare(old, new)
+    assert d["overall"]["delta"] == -8
     assert any(r["key"] == "schema" for r in d["regressions"])
     assert not d["gains"]
 
@@ -123,13 +120,13 @@ def test_comparaison_detecte_regression():
 if __name__ == "__main__":
     import sys
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    échecs = 0
+    failures = 0
     for fn in fns:
         try:
             fn()
             print(f"  ✓ {fn.__name__}")
         except AssertionError as e:
-            échecs += 1
-            print(f"  ✗ {fn.__name__} : {e}")
-    print(f"\n  {len(fns) - échecs}/{len(fns)} tests au vert")
-    sys.exit(1 if échecs else 0)
+            failures += 1
+            print(f"  ✗ {fn.__name__}: {e}")
+    print(f"\n  {len(fns) - failures}/{len(fns)} tests passing")
+    sys.exit(1 if failures else 0)
