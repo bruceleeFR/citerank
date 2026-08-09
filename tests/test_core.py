@@ -107,6 +107,19 @@ def test_remediation_ne_fabrique_jamais():
     assert data2["sameAs"] == ["https://linkedin.com/company/acme"]
 
 
+def test_comparaison_detecte_regression():
+    """La comparaison temporelle repère les baisses, pas seulement les hausses."""
+    from citerank.history import comparer
+    ancien = {"started_at": "2026-08-01", "overall_ai_search_score": 60,
+              "scores": [{"key": "schema", "value": 80}, {"key": "technical", "value": 90}]}
+    nouveau = {"started_at": "2026-08-09", "overall_ai_search_score": 52,
+               "scores": [{"key": "schema", "value": 55}, {"key": "technical", "value": 90}]}
+    d = comparer(ancien, nouveau)
+    assert d["global"]["delta"] == -8
+    assert any(r["key"] == "schema" for r in d["regressions"])
+    assert not d["gains"]
+
+
 if __name__ == "__main__":
     import sys
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

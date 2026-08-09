@@ -165,6 +165,64 @@ def _cmd_fix(args) -> int:
     return 0
 
 
+def _cmd_report(args) -> int:
+    from . import report_html
+    comp = None
+    if args.with_:
+        from . import competitive
+        concurrents = [u.strip() for u in args.with_.split(",") if u.strip()]
+        comp = asyncio.run(competitive.comparer(args.url, concurrents,
+                                                autoriser_local=args.allow_local))
+        audit = comp.cible
+    else:
+        audit = asyncio.run(engine.audit(args.url, autoriser_local=args.allow_local))
+    html = report_html.rendre(audit, comparaison=comp, marque_agence=args.agency or "")
+    sortie = args.out or f"citerank-{audit.domain.replace('.', '_')}.html"
+    with open(sortie, "w", encoding="utf-8") as f:
+        f.write(html)
+    print(f"  → rapport HTML autonome : {sortie}  (score {audit.overall():.0f}/100)")
+    return 0
+
+
+def _cmd_init(args) -> int:
+    from . import history
+    base = history.init(args.path)
+    print(f"  Projet CiteRank initialisé : {base}")
+    return 0
+
+
+def _cmd_monitor(args) -> int:
+    from . import history
+    audit = asyncio.run(engine.audit(args.url, autoriser_local=args.allow_local))
+    chemin = history.enregistrer(audit)
+    print(f"  Instantané enregistré : {chemin}  (score {audit.overall():.0f}/100)")
+    return 0
+
+
+def _cmd_compare(args) -> int:
+    from . import history
+    from urllib.parse import urlparse
+    domaine = urlparse(args.url if "://" in args.url else "//" + args.url).netloc or args.url
+    snaps = history.instantanes(domaine)
+    if len(snaps) < 2:
+        print(f"  Il faut au moins 2 instantanés (trouvés : {len(snaps)}). "
+              f"Lance `citerank monitor {args.url}` régulièrement.", file=sys.stderr)
+        return 2
+    d = history.comparer(snaps[0], snaps[-1])
+    print(f"\n  Évolution · {domaine}")
+    print(f"  {'─' * 46}")
+    g = d["global"]
+    fleche = "▲" if g["delta"] > 0 else ("▼" if g["delta"] < 0 else "=")
+    print(f"  Score global : {g['avant']:.0f} → {g['apres']:.0f}  {fleche} {g['delta']:+.0f}")
+    for x in d["deltas"]:
+        f = "▲" if x["delta"] > 0 else ("▼" if x["delta"] < 0 else "=")
+        print(f"    {x['key']:<14} {x['avant']:.0f} → {x['apres']:.0f}  {f} {x['delta']:+.0f}")
+    if d["regressions"]:
+        print(f"\n  ⚠ RÉGRESSION sur : {', '.join(r['key'] for r in d['regressions'])}")
+    print()
+    return 0
+
+
 def _cmd_doctor(args) -> int:
     print("  CiteRank · diagnostic")
     print(f"  Python           : {sys.version.split()[0]}")
@@ -230,6 +288,28 @@ def main(argv=None) -> int:
                     help="écrit les fichiers générés (llms.txt) dans ce dossier")
     fx.add_argument("--allow-local", action="store_true")
     fx.set_defaults(func=_cmd_fix)
+
+    rp = sub.add_parser("report", help="Rapport HTML autonome, partageable")
+    rp.add_argument("url")
+    rp.add_argument("--with", dest="with_", metavar="URL1,URL2",
+                    help="ajoute une comparaison concurrentielle")
+    rp.add_argument("--out", metavar="FICHIER.html")
+    rp.add_argument("--agency", help="marque blanche : nom de l'agence en pied")
+    rp.add_argument("--allow-local", action="store_true")
+    rp.set_defaults(func=_cmd_report)
+
+    ini = sub.add_parser("init", help="Initialise un projet (.geo/) pour le suivi")
+    ini.add_argument("path", nargs="?", default=".")
+    ini.set_defaults(func=_cmd_init)
+
+    mon = sub.add_parser("monitor", help="Enregistre un instantané daté")
+    mon.add_argument("url")
+    mon.add_argument("--allow-local", action="store_true")
+    mon.set_defaults(func=_cmd_monitor)
+
+    cmp = sub.add_parser("compare", help="Évolution entre le 1er et le dernier instantané")
+    cmp.add_argument("url")
+    cmp.set_defaults(func=_cmd_compare)
 
     d = sub.add_parser("doctor", help="Vérifie l'environnement")
     d.set_defaults(func=_cmd_doctor)
