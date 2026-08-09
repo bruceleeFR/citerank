@@ -72,6 +72,59 @@ def _cmd_visibility(args) -> int:
     return 0
 
 
+def _cmd_competitors(args) -> int:
+    from . import competitive
+    concurrents = [u.strip() for u in (args.with_ or "").split(",") if u.strip()]
+    if not concurrents:
+        print("  Fournis au moins un concurrent : --with url1,url2", file=sys.stderr)
+        return 2
+    comp = asyncio.run(competitive.comparer(args.url, concurrents,
+                                            autoriser_local=args.allow_local))
+    raisons = competitive.expliquer_ecart(comp)
+    print(report.comparaison_console(comp, raisons))
+    if args.md:
+        with open(args.md, "w", encoding="utf-8") as f:
+            f.write(report.comparaison_markdown(comp, raisons))
+        print(f"  → rapport Markdown : {args.md}")
+    return 0
+
+
+def _cmd_sov(args) -> int:
+    from . import competitive
+    from .providers import MockProvider, fournisseurs_disponibles
+    # marques : "Nom=domaine.fr", la première est la cible.
+    marques = []
+    for item in args.brands:
+        nom, _, dom = item.partition("=")
+        marques.append((nom.strip(), (dom or nom).strip()))
+    if args.queries:
+        with open(args.queries, encoding="utf-8") as f:
+            queries = [l.strip() for l in f if l.strip()]
+    else:
+        cat = args.topic or marques[0][0]
+        queries = [f"Meilleur service pour {cat} ?", f"Alternatives à {marques[0][0]} ?",
+                   f"Qui recommandes-tu pour {cat} ?"]
+    provs = [MockProvider()] if args.mock else fournisseurs_disponibles()
+    if not provs:
+        print("  Aucun fournisseur IA. Définis OPENAI_API_KEY ou utilise --mock.",
+              file=sys.stderr)
+        return 2
+    res = asyncio.run(competitive.share_of_voice(marques, queries, providers=provs,
+                                                 runs=args.runs))
+    print(f"\n  Share of Voice IA · cible : {marques[0][0]}")
+    print(f"  {'─' * 46}")
+    if not res.get("classement"):
+        print(f"  Non mesuré : {res.get('raison')}")
+        return 2
+    for i, r in enumerate(res["classement"], 1):
+        vous = " ◄ vous" if r["marque"] == res["cible"] else ""
+        print(f"  {i}. {r['marque']:<20} score {r['score']:>5}  "
+              f"reco {r['recommandation']:>5}%  cite {r['citation']:>5}%{vous}")
+    print(f"\n  Votre rang : {res['rang_cible']}/{res['total']}")
+    print(f"  ⚠ {res['avertissement']}\n")
+    return 0
+
+
 def _cmd_doctor(args) -> int:
     print("  CiteRank · diagnostic")
     print(f"  Python           : {sys.version.split()[0]}")
@@ -110,6 +163,22 @@ def main(argv=None) -> int:
     v.add_argument("--runs", type=int, default=1)
     v.add_argument("--mock", action="store_true", help="démonstration hors ligne")
     v.set_defaults(func=_cmd_visibility)
+
+    c = sub.add_parser("competitors", help="Comparaison de Readiness vs concurrents (local)")
+    c.add_argument("url")
+    c.add_argument("--with", dest="with_", metavar="URL1,URL2", required=True)
+    c.add_argument("--md", metavar="FICHIER")
+    c.add_argument("--allow-local", action="store_true")
+    c.set_defaults(func=_cmd_competitors)
+
+    sov = sub.add_parser("share-of-voice", help="Part de voix IA entre marques (nécessite une clé)")
+    sov.add_argument("brands", nargs="+", metavar="Nom=domaine.fr",
+                     help="marques comparées ; la première est la cible")
+    sov.add_argument("--topic")
+    sov.add_argument("--queries", metavar="FICHIER")
+    sov.add_argument("--runs", type=int, default=1)
+    sov.add_argument("--mock", action="store_true")
+    sov.set_defaults(func=_cmd_sov)
 
     d = sub.add_parser("doctor", help="Vérifie l'environnement")
     d.set_defaults(func=_cmd_doctor)

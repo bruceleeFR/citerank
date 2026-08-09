@@ -71,6 +71,25 @@ def test_mock_est_marque_factice():
     assert "FACTICES" in s["avertissement"]
 
 
+def test_expliquer_ecart_est_adosse_aux_scores():
+    """L'explication concurrentielle ne sort que d'écarts mesurés, jamais du vide."""
+    from citerank.competitive import Comparaison, expliquer_ecart
+    from citerank.models import SiteAudit, Score, Nature
+
+    def audit(dom, schema_val):
+        a = SiteAudit(url=f"https://{dom}", domain=dom, started_at=now_iso())
+        a.scores.append(Score("schema", "Données structurées", schema_val,
+                              Nature.MEASURED, 1.0))
+        a.scores.append(Score("readiness", "Readiness", schema_val, Nature.MEASURED, 1.0))
+        return a
+
+    comp = Comparaison(cible=audit("moi.test", 20), concurrents=[audit("eux.test", 85)])
+    raisons = expliquer_ecart(comp)
+    assert any("eux.test" in r and "85" in r for r in raisons)
+    rang, total = comp.rang_cible()
+    assert (rang, total) == (2, 2)
+
+
 if __name__ == "__main__":
     import sys
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

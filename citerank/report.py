@@ -83,6 +83,50 @@ def en_markdown(audit: SiteAudit) -> str:
     return "\n".join(L)
 
 
+def comparaison_console(comp, raisons: list[str]) -> str:
+    """Rendu terminal de la comparaison concurrentielle."""
+    lignes = comp.tableau()
+    rang, total = comp.rang_cible()
+    L = [f"\n  CiteRank · comparaison concurrentielle",
+         f"  {'─' * 58}",
+         f"  {'Domaine':<28}{'Global':>7}{'Ready':>7}{'Tech':>6}{'Schéma':>8}{'Cite':>6}"]
+    for i, r in enumerate(sorted(lignes, key=lambda x: x['global'], reverse=True), 1):
+        marque = " ◄ vous" if r["domaine"] == comp.cible.domain else ""
+        L.append(f"  {r['domaine'][:27]:<28}{r['global']:>7.0f}"
+                 f"{_n(r['readiness']):>7}{_n(r['technical']):>6}"
+                 f"{_n(r['schema']):>8}{_n(r['citability']):>6}{marque}")
+    L.append(f"\n  Votre rang : {rang}/{total}")
+    L.append(f"\n  Pourquoi l'écart :")
+    for r in raisons:
+        propre = r.replace("**", "")
+        L.append(f"    • {propre}")
+    return "\n".join(L) + "\n"
+
+
+def _n(v):
+    return "—" if v is None else f"{v:.0f}"
+
+
+def comparaison_markdown(comp, raisons: list[str]) -> str:
+    lignes = sorted(comp.tableau(), key=lambda x: x["global"], reverse=True)
+    rang, total = comp.rang_cible()
+    L = [f"# Comparaison concurrentielle — {comp.cible.domain}",
+         f"\n**Votre rang : {rang}/{total}**\n",
+         "| Domaine | Global | Readiness | Technique | Schéma | Citabilité |",
+         "|---|---:|---:|---:|---:|---:|"]
+    for r in lignes:
+        vous = " **◄ vous**" if r["domaine"] == comp.cible.domain else ""
+        L.append(f"| {r['domaine']}{vous} | {r['global']:.0f} | {_n(r['readiness'])} | "
+                 f"{_n(r['technical'])} | {_n(r['schema'])} | {_n(r['citability'])} |")
+    L.append(f"\n## Pourquoi vos concurrents passent devant\n")
+    for r in raisons:
+        L.append(f"- {r}")
+    L.append("\n---\n_Comparaison de Readiness : mesurée et déterministe. Elle ne "
+             "présume pas de la visibilité réelle dans les réponses IA — voir le "
+             "Share of Voice pour cela._")
+    return "\n".join(L)
+
+
 def resume_console(audit: SiteAudit) -> str:
     """Sortie compacte pour le terminal."""
     L = [f"\n  CiteRank · {audit.domain}",
