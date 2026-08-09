@@ -125,6 +125,46 @@ def _cmd_sov(args) -> int:
     return 0
 
 
+def _cmd_fix(args) -> int:
+    from . import remediation
+    from .crawl import Crawler, nouvelle_session, valider_url
+
+    async def _run():
+        url = valider_url(args.url, args.allow_local)
+        audit = asyncio.run  # noqa (placeholder pour lisibilité)
+        a = await engine.audit(url, autoriser_local=args.allow_local)
+        # On récupère la page une fois de plus pour générer les correctifs à
+        # partir de son contenu réel (liens, og:image, description).
+        crawler = Crawler(autoriser_local=args.allow_local)
+        async with nouvelle_session() as s:
+            page = await crawler.get(url, s)
+        same_as = [u.strip() for u in (args.same_as or "").split(",") if u.strip()]
+        fixes = remediation.proposer(a, page, name=args.name or "",
+                                     legal_name=args.legal_name or "", same_as=same_as)
+        return a, fixes
+
+    a, fixes = asyncio.run(_run())
+    if not fixes:
+        print("  Aucun correctif automatique à proposer (rien de détecté à corriger).")
+        return 0
+    print(f"\n  CiteRank · correctifs proposés pour {a.domain}")
+    print(f"  {'─' * 50}")
+    for f in fixes:
+        print(f"\n  ▸ {f.title}  →  {f.target}")
+        if f.note:
+            print(f"    {f.note}")
+        print("    " + "\n    ".join(f.content.splitlines()))
+        if args.write_dir and f.kind == "file":
+            import os
+            chemin = os.path.join(args.write_dir, f.target.lstrip("/"))
+            with open(chemin, "w", encoding="utf-8") as fh:
+                fh.write(f.content)
+            print(f"    ✓ écrit : {chemin}")
+    print("\n  Les blocs <head> sont à coller (ou à appliquer via le skill sur un "
+          "projet local). Aucun fait n'a été inventé.\n")
+    return 0
+
+
 def _cmd_doctor(args) -> int:
     print("  CiteRank · diagnostic")
     print(f"  Python           : {sys.version.split()[0]}")
@@ -179,6 +219,17 @@ def main(argv=None) -> int:
     sov.add_argument("--runs", type=int, default=1)
     sov.add_argument("--mock", action="store_true")
     sov.set_defaults(func=_cmd_sov)
+
+    fx = sub.add_parser("fix", help="Génère les correctifs (JSON-LD, llms.txt, meta)")
+    fx.add_argument("url")
+    fx.add_argument("--name", help="nom de marque exact (sinon dérivé du titre)")
+    fx.add_argument("--legal-name", help="raison sociale, si différente")
+    fx.add_argument("--same-as", metavar="URL1,URL2",
+                    help="profils vérifiés (LinkedIn, Wikidata…) — jamais devinés")
+    fx.add_argument("--write-dir", metavar="DOSSIER",
+                    help="écrit les fichiers générés (llms.txt) dans ce dossier")
+    fx.add_argument("--allow-local", action="store_true")
+    fx.set_defaults(func=_cmd_fix)
 
     d = sub.add_parser("doctor", help="Vérifie l'environnement")
     d.set_defaults(func=_cmd_doctor)

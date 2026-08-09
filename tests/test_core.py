@@ -90,6 +90,23 @@ def test_expliquer_ecart_est_adosse_aux_scores():
     assert (rang, total) == (2, 2)
 
 
+def test_remediation_ne_fabrique_jamais():
+    """Un correctif ne remplit que des faits dérivés ; sameAs vide s'il n'est pas fourni."""
+    import json as _json
+    from citerank.remediation import organization_jsonld
+    page = _page(final_url="https://ex.test/", title="Truc génial — Acme",
+                 meta_description="Une vraie description.")
+    fix = organization_jsonld(page, None)          # aucun sameAs fourni
+    data = _json.loads(fix.content.split(">", 1)[1].rsplit("<", 1)[0])
+    assert data["name"] == "Acme"                  # dérivé du titre, pas inventé
+    assert data["url"] == "https://ex.test"
+    assert "sameAs" not in data                    # jamais deviné
+    # Fourni explicitement : présent.
+    fix2 = organization_jsonld(page, None, same_as=["https://linkedin.com/company/acme"])
+    data2 = _json.loads(fix2.content.split(">", 1)[1].rsplit("<", 1)[0])
+    assert data2["sameAs"] == ["https://linkedin.com/company/acme"]
+
+
 if __name__ == "__main__":
     import sys
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
