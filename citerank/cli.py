@@ -224,6 +224,17 @@ def _cmd_compare(args) -> int:
     return 0
 
 
+def _cmd_serve(args) -> int:
+    from . import api
+    print(f"  CiteRank API sur http://{args.host}:{args.port}")
+    print("    GET  /health")
+    print("    POST /api/audit          {\"url\": \"...\"}")
+    print("    POST /api/competitors    {\"url\": \"...\", \"competitors\": [...]}")
+    print("    GET  /api/report?url=...\n")
+    api.servir(args.host, args.port)
+    return 0
+
+
 def _cmd_doctor(args) -> int:
     print("  CiteRank · diagnostic")
     print(f"  Python           : {sys.version.split()[0]}")
@@ -311,6 +322,11 @@ def main(argv=None) -> int:
     cmp = sub.add_parser("compare", help="Évolution entre le 1er et le dernier instantané")
     cmp.add_argument("url")
     cmp.set_defaults(func=_cmd_compare)
+
+    sv = sub.add_parser("serve", help="Lance l'API REST (couche SaaS)")
+    sv.add_argument("--host", default="127.0.0.1")
+    sv.add_argument("--port", type=int, default=8900)
+    sv.set_defaults(func=_cmd_serve)
 
     d = sub.add_parser("doctor", help="Vérifie l'environnement")
     d.set_defaults(func=_cmd_doctor)
