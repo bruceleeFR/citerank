@@ -22,7 +22,6 @@ Format inspired by [Keep a Changelog](https://keepachangelog.com/).
 First foundation — independent rewrite inspired by `geo-seo-claude` (MIT).
 
 ### Added
-- **Agent Analytics** (`agents`): AI-crawler activity from an access log — which engines actually read the site, and which never did (MEASURED, from real logs).
 - **Interface-independent Python engine**: CLI, skill, API and SaaS are just
   skins over `citerank/`.
 - **Readiness**, local and deterministic: technical (robots, sitemap, llms.txt,
