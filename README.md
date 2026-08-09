@@ -80,6 +80,7 @@ labeled fake). With two providers, consensus across engines becomes meaningful.
 | `competitors` | Readiness comparison vs competitors + "why they win" |
 | `visibility` | Real AI visibility (needs an API key) |
 | `share-of-voice` | AI share of voice across brands |
+| `agents` | AI-crawler activity from your access log — which engines actually read you (MEASURED) |
 | `fix` | Generate fixes (JSON-LD, llms.txt, meta) — never fabricates facts |
 | `report` | Standalone, shareable HTML report |
 | `init` / `monitor` / `compare` | Project mode: dated snapshots, regression detection |
