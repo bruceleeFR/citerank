@@ -4,13 +4,15 @@ suivent le même contrat que base.Provider ; OpenRouter fonctionne déjà via
 OpenAIProvider en pointant OPENAI_BASE_URL sur son endpoint.
 """
 
+from .anthropic_provider import AnthropicProvider
 from .base import Provider
 from .mock import MockProvider
 from .openai_provider import OpenAIProvider
 
-# Anthropic : adaptateur à ajouter (même contrat). Laissé hors registre tant
-# que non implémenté, plutôt qu'un stub qui mentirait sur sa disponibilité.
-_CLASSES = [OpenAIProvider]
+# Gemini et Perplexity suivent le même contrat ; à ajouter quand une clé est
+# disponible pour les tester en réel. On n'enregistre jamais un stub qui
+# mentirait sur sa disponibilité.
+_CLASSES = [OpenAIProvider, AnthropicProvider]
 
 
 def fournisseurs_disponibles() -> list[Provider]:
@@ -23,4 +25,10 @@ def fournisseurs_disponibles() -> list[Provider]:
     return dispo
 
 
-__all__ = ["Provider", "MockProvider", "OpenAIProvider", "fournisseurs_disponibles"]
+__all__ = [
+    "AnthropicProvider",
+    "MockProvider",
+    "OpenAIProvider",
+    "Provider",
+    "fournisseurs_disponibles",
+]

@@ -1,2 +1,2 @@
 """Analyseurs locaux et déterministes du moteur (aucun appel LLM)."""
-from . import technical, schema_ld, citability  # noqa: F401
+from . import citability, schema_ld, technical  # noqa: F401

@@ -13,8 +13,7 @@ from urllib.parse import urlparse
 import aiohttp
 
 from ..crawl import Crawler
-from ..models import (CrawledPage, Finding, Nature, Score, ScoreComponent,
-                      Severity, SiteContext)
+from ..models import CrawledPage, Finding, Nature, Score, ScoreComponent, Severity, SiteContext
 
 # Robots IA à considérer explicitement. Bloquer GPTBot, c'est se rendre
 # invisible à ChatGPT ; c'est un choix légitime, mais qui doit être conscient.

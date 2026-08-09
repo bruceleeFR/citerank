@@ -87,7 +87,7 @@ def comparaison_console(comp, raisons: list[str]) -> str:
     """Rendu terminal de la comparaison concurrentielle."""
     lignes = comp.tableau()
     rang, total = comp.rang_cible()
-    L = [f"\n  CiteRank · comparaison concurrentielle",
+    L = ["\n  CiteRank · comparaison concurrentielle",
          f"  {'─' * 58}",
          f"  {'Domaine':<28}{'Global':>7}{'Ready':>7}{'Tech':>6}{'Schéma':>8}{'Cite':>6}"]
     for i, r in enumerate(sorted(lignes, key=lambda x: x['global'], reverse=True), 1):
@@ -96,7 +96,7 @@ def comparaison_console(comp, raisons: list[str]) -> str:
                  f"{_n(r['readiness']):>7}{_n(r['technical']):>6}"
                  f"{_n(r['schema']):>8}{_n(r['citability']):>6}{marque}")
     L.append(f"\n  Votre rang : {rang}/{total}")
-    L.append(f"\n  Pourquoi l'écart :")
+    L.append("\n  Pourquoi l'écart :")
     for r in raisons:
         propre = r.replace("**", "")
         L.append(f"    • {propre}")
@@ -118,7 +118,7 @@ def comparaison_markdown(comp, raisons: list[str]) -> str:
         vous = " **◄ vous**" if r["domaine"] == comp.cible.domain else ""
         L.append(f"| {r['domaine']}{vous} | {r['global']:.0f} | {_n(r['readiness'])} | "
                  f"{_n(r['technical'])} | {_n(r['schema'])} | {_n(r['citability'])} |")
-    L.append(f"\n## Pourquoi vos concurrents passent devant\n")
+    L.append("\n## Pourquoi vos concurrents passent devant\n")
     for r in raisons:
         L.append(f"- {r}")
     L.append("\n---\n_Comparaison de Readiness : mesurée et déterministe. Elle ne "

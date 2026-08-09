@@ -10,8 +10,7 @@ désambiguïsable par une IA.
 
 from __future__ import annotations
 
-from ..models import (CrawledPage, Finding, Nature, Score, ScoreComponent,
-                      Severity)
+from ..models import CrawledPage, Finding, Nature, Score, ScoreComponent, Severity
 
 TYPES_ENTITE = {"Organization", "Corporation", "LocalBusiness", "Person"}
 TYPES_UTILES = {"Product", "Offer", "FAQPage", "Article", "BreadcrumbList",

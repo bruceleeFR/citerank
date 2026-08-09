@@ -13,7 +13,7 @@ le moteur installable sans arbre de dépendances.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
@@ -251,10 +251,9 @@ class VisibilityResult:
         Une marque citée 9 fois sur 10 est un fait ; 5 sur 10 est un doute. On
         le dit, on ne le lisse pas (point 13).
         """
-        r = self.mention_rate
-        spread = max((self._rate(lambda x: x.brand_mentioned) for _ in [0]), default=0)
         if not self.runs:
             return "none"
+        r = self.mention_rate
         if r >= 0.8 or r <= 0.2:
             return "high"
         if 0.4 <= r <= 0.6:

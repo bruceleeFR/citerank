@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 
 from .analyzers import citability, schema_ld, technical
 from .crawl import Crawler, nouvelle_session, valider_url
-from .models import (Nature, Score, ScoreComponent, SiteAudit, now_iso)
+from .models import Nature, Score, ScoreComponent, SiteAudit, now_iso
 
 
 async def audit(url: str, *, autoriser_local: bool = False) -> SiteAudit:

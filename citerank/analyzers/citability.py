@@ -25,8 +25,7 @@ from __future__ import annotations
 
 import re
 
-from ..models import (CrawledPage, Finding, Nature, Score, ScoreComponent,
-                      Severity)
+from ..models import CrawledPage, Finding, Nature, Score, ScoreComponent, Severity
 
 _RE_NOMBRE = re.compile(r"\b\d+([.,]\d+)?\s?(%|€|\$|km|kg|ms|s|min|h|M|k|Md)?\b")
 _RE_DATE = re.compile(r"\b(19|20)\d{2}\b|\b\d{1,2}\s+(janvier|février|mars|avril|mai|juin|"

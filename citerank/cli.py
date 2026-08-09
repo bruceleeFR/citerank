@@ -200,8 +200,9 @@ def _cmd_monitor(args) -> int:
 
 
 def _cmd_compare(args) -> int:
-    from . import history
     from urllib.parse import urlparse
+
+    from . import history
     domaine = urlparse(args.url if "://" in args.url else "//" + args.url).netloc or args.url
     snaps = history.instantanes(domaine)
     if len(snaps) < 2:

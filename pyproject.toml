@@ -27,3 +27,9 @@ include = ["citerank*"]
 
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
+# BLE001 : les adaptateurs de fournisseurs (providers/) attrapent volontairement
+# toute exception — un moteur IA en panne ne doit jamais casser le consensus, il
+# renvoie un résultat vide. C'est un choix de conception documenté, pas un oubli.
+ignore = ["BLE001"]
