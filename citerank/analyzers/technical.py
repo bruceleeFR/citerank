@@ -8,6 +8,7 @@ a free, unlimited audit (point 31) — the acquisition layer.
 
 from __future__ import annotations
 
+import re
 from urllib.parse import urlparse
 
 import aiohttp
@@ -129,12 +130,45 @@ async def analyze(url: str, crawler: Crawler, session: aiohttp.ClientSession,
     comps.append(ScoreComponent("headings", "Heading structure", pts_h1, 15,
                                 Nature.OBSERVED, det))
 
+    # -- Discoverability meta (15 pts): canonical, Open Graph, Twitter, viewport, favicon
+    html = page.html
+    has_canonical = bool(re.search(r'<link[^>]+rel=["\']canonical["\']', html, re.IGNORECASE))
+    has_og = bool(re.search(r'<meta[^>]+property=["\']og:(title|description|image)["\']', html, re.IGNORECASE))
+    has_twitter = bool(re.search(r'<meta[^>]+name=["\']twitter:card["\']', html, re.IGNORECASE))
+    has_viewport = bool(re.search(r'<meta[^>]+name=["\']viewport["\']', html, re.IGNORECASE))
+    has_favicon = bool(re.search(r'<link[^>]+rel=["\'][^"\']*icon', html, re.IGNORECASE))
+    pts_disc = (sum([has_canonical, has_og, has_twitter, has_viewport, has_favicon]) * 3)
+    comps.append(ScoreComponent("discovery", "Discoverability meta", pts_disc, 15, Nature.MEASURED,
+                                f"canonical={has_canonical}, og={has_og}, twitter={has_twitter}, "
+                                f"viewport={has_viewport}, favicon={has_favicon}"))
+    if not has_canonical:
+        findings.append(Finding("no-canonical", "No canonical URL", Severity.LOW,
+                                Nature.MEASURED, 1.0, "technical", page.final_url,
+                                recommendation="Add <link rel=\"canonical\"> to prevent duplicate-content dilution."))
+    if not has_og:
+        findings.append(Finding("no-opengraph", "No Open Graph tags", Severity.LOW,
+                                Nature.MEASURED, 1.0, "technical", page.final_url,
+                                detail="Open Graph controls how the page appears when shared and previewed.",
+                                recommendation="Add og:title, og:description and og:image."))
+
+    # -- Indexability (10 pts): a noindex here is a silent killer ----------
+    noindex = bool(re.search(r'<meta[^>]+name=["\']robots["\'][^>]+content=["\'][^"\']*noindex', html, re.IGNORECASE))
+    comps.append(ScoreComponent("indexable", "Indexable (no meta noindex)",
+                                0 if noindex else 10, 10, Nature.MEASURED,
+                                "noindex present" if noindex else "indexable"))
+    if noindex:
+        findings.append(Finding("meta-noindex", "Page marked noindex", Severity.HIGH,
+                                Nature.MEASURED, 1.0, "technical", page.final_url,
+                                detail="A meta robots noindex tells engines to skip this page entirely.",
+                                recommendation="Remove the noindex directive if this page should be found."))
+
     score = Score(
         key="technical", label="Technical SEO",
-        value=sum(c.points for c in comps),
+        value=round(sum(c.points for c in comps) / sum(c.max_points for c in comps) * 100, 1),
         nature=Nature.MEASURED, confidence=1.0, components=comps,
-        methodology="Sum of measured components: AI-crawler access, sitemap, "
-                    "llms.txt, transport, head tags, heading structure.",
+        methodology="Normalized sum of measured components: AI-crawler access, sitemap, "
+                    "llms.txt, transport, head tags, heading structure, discoverability "
+                    "meta (canonical/OG/Twitter/viewport/favicon), and indexability.",
     )
     ctx = SiteContext(url=page.final_url, domain=base.netloc, robots_txt=robots,
                       llms_txt=llms, sitemap_present=has_sitemap)

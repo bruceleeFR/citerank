@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-from .analyzers import citability, schema_ld, technical
+from .analyzers import citability, content, schema_ld, technical
 from .crawl import Crawler, new_session, validate_url
 from .models import Nature, Score, ScoreComponent, SiteAudit, now_iso
 
@@ -46,10 +46,11 @@ async def audit(url: str, *, allow_local: bool = False) -> SiteAudit:
         s_tech, f_tech, ctx = await technical.analyze(url, crawler, session, page)
         s_schema, f_schema = schema_ld.analyze(page)
         s_cite, f_cite = citability.analyze(page)
+        s_content, f_content = content.analyze(page)
 
     result.context = ctx
-    result.scores.extend([s_tech, s_schema, s_cite])
-    result.findings.extend([*f_tech, *f_schema, *f_cite])
+    result.scores.extend([s_tech, s_schema, s_cite, s_content])
+    result.findings.extend([*f_tech, *f_schema, *f_cite, *f_content])
 
     # The READINESS score is an explicit composite of the three local axes. We
     # name it and separate it from Visibility: a perfectly prepared site is not

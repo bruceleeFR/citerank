@@ -136,6 +136,25 @@ def test_agents_detects_ai_crawlers():
     assert "Perplexity" in rep.engines_missing
 
 
+def test_content_eeat_scores_and_flags():
+    """Content/E-E-A-T: thin page flags thin-content and weak trust surface."""
+    from citerank.analyzers import content
+    page = _page(html="<html><body><p>short</p></body></html>", text="short one two three",
+                 links_external=[], links_internal=[])
+    score, findings = content.analyze(page)
+    assert score.key == "content"
+    assert any(f.id == "thin-content" for f in findings)
+    assert score.nature.value == "observed"
+    # A rich page scores higher and doesn't flag thin content.
+    big = " ".join(["word"] * 700)
+    page2 = _page(html=f"<html><body><p>{big}</p><img src=x alt=hi></body></html>", text=big,
+                  links_external=["https://a.com", "https://b.com", "https://c.com"],
+                  links_internal=["https://ex.test/about", "https://ex.test/contact"])
+    s2, f2 = content.analyze(page2)
+    assert s2.value > score.value
+    assert not any(f.id == "thin-content" for f in f2)
+
+
 if __name__ == "__main__":
     import sys
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
