@@ -116,7 +116,7 @@ def analyze_lines(lines) -> AgentReport:
         if not m:
             continue
         report.total_requests += 1
-        raw_date, _method, path, status, ua = m.groups()
+        raw_date, _method, path, _status, ua = m.groups()
         hit = match_agent(ua)
         if not hit:
             continue
