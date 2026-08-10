@@ -130,7 +130,7 @@ def console_summary(audit: SiteAudit) -> str:
     """Compact terminal output."""
     L = [f"\n  CiteRank · {audit.domain}",
          f"  {'─' * 46}",
-         f"  Overall AI-Search score: {audit.overall():.0f}/100\n"]
+         f"  Overall AI-Search score: {audit.overall():.0f}/100   ({audit.pages_crawled} page(s) crawled)\n"]
     for s in audit.scores:
         bar = "█" * int(s.value / 5) + "·" * (20 - int(s.value / 5))
         L.append(f"  {s.label:<26} {bar} {s.value:>3.0f}  [{_LABEL[s.nature]}]")

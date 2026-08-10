@@ -54,7 +54,7 @@ async def compare(target_url: str, competitor_urls: list[str], *,
     """Audit the target and its competitors in parallel, then assemble the comparison."""
     urls = [target_url, *competitor_urls]
     audits = await asyncio.gather(*[
-        engine.audit(u, allow_local=allow_local) for u in urls
+        engine.audit(u, allow_local=allow_local, max_pages=1) for u in urls
     ])
     return Comparison(target=audits[0], competitors=list(audits[1:]))
 

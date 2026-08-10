@@ -167,6 +167,7 @@ class SiteAudit:
     scores: list[Score] = field(default_factory=list)
     findings: list[Finding] = field(default_factory=list)
     context: SiteContext | None = None
+    pages_crawled: int = 1
 
     def score(self, key: str) -> Score | None:
         return next((s for s in self.scores if s.key == key), None)
@@ -197,6 +198,7 @@ class SiteAudit:
             "domain": self.domain,
             "started_at": self.started_at,
             "finished_at": self.finished_at,
+            "pages_crawled": self.pages_crawled,
             "overall_ai_search_score": self.overall(),
             "scores": [s.to_dict() for s in self.scores],
             "findings": [f.to_dict() for f in self.findings],
