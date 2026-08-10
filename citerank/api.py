@@ -72,6 +72,55 @@ async def _competitors(req: web.Request) -> web.Response:
     })
 
 
+async def _visibility(req: web.Request) -> web.Response:
+    """
+    Paid layer — measures real AI visibility (calls LLM providers, costs money).
+    NOT exposed on the public gateway: only the authenticated SaaS reaches this,
+    over localhost, behind a Pro gate.
+    """
+    from urllib.parse import urlparse
+
+    from . import visibility
+    data = await _body(req) or {}
+    url = data.get("url", "")
+    if not url:
+        return _json_error("field 'url' required")
+    try:
+        validate_url(url)
+    except ValueError as e:
+        return _json_error(f"URL refused: {e}", 422)
+    domain = urlparse(url if "://" in url else "//" + url).netloc or url
+    brand = data.get("brand") or domain.split(".")[0]
+    queries = data.get("queries") or [
+        f"Best company for {brand.lower()}?",
+        f"Alternatives to {brand}?",
+        f"Is {brand} reputable?",
+    ]
+    runs = int(data.get("runs", 1))
+    async with _LIMIT:
+        res = await visibility.measure(queries, brand=brand, domain=domain, runs=runs)
+    score = visibility.visibility_score(res)
+    score["brand"] = brand
+    score["per_query"] = [
+        {"query": r.query, "mention": round(r.mention_rate * 100),
+         "recommendation": round(r.recommendation_rate * 100),
+         "citation": round(r.citation_rate * 100)}
+        for r in res
+    ]
+    return web.json_response(score)
+
+
+async def _agents(req: web.Request) -> web.Response:
+    """Paid layer — AI-crawler analytics from a user-supplied access log. No LLM cost."""
+    from . import agents
+    data = await _body(req) or {}
+    log = data.get("log", "")
+    if not log or not isinstance(log, str):
+        return _json_error("field 'log' (access-log text) required")
+    rep = agents.analyze_lines(log.splitlines())
+    return web.json_response(rep.to_dict())
+
+
 async def _report(req: web.Request) -> web.Response:
     url = req.query.get("url", "")
     if not url:
@@ -102,6 +151,10 @@ def create_app() -> web.Application:
         web.post("/api/audit", _audit),
         web.post("/api/competitors", _competitors),
         web.get("/api/report", _report),           # returns the HTML report
+        # Paid layer — kept off the public gateway (see nginx); reached only by
+        # the authenticated SaaS over localhost, behind a Pro gate.
+        web.post("/api/visibility", _visibility),
+        web.post("/api/agents", _agents),
     ])
     return app
 
