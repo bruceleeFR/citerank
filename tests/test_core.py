@@ -155,6 +155,22 @@ def test_content_eeat_scores_and_flags():
     assert not any(f.id == "thin-content" for f in f2)
 
 
+def test_brand_authority_scores_social_and_encyclopedic():
+    """Brand Authority: social profiles + Wikipedia lift the score, absence flags it."""
+    from citerank.analyzers import brand
+    weak = _page(html="<html><body>x</body></html>", links_external=[])
+    s0, f0 = brand.analyze(weak)
+    assert s0.key == "brand"
+    assert any(f.id == "weak-social" for f in f0)
+    strong = _page(
+        html='<html><body><a href="https://en.wikipedia.org/wiki/Acme">wiki</a></body></html>',
+        links_external=["https://linkedin.com/company/acme", "https://github.com/acme",
+                        "https://x.com/acme", "https://en.wikipedia.org/wiki/Acme"])
+    s1, f1 = brand.analyze(strong)
+    assert s1.value > s0.value
+    assert not any(f.id == "weak-social" for f in f1)
+
+
 if __name__ == "__main__":
     import sys
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

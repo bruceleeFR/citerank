@@ -180,8 +180,8 @@ class SiteAudit:
         denominator.
         """
         weights = {
-            "readiness": 0.25, "technical": 0.15, "schema": 0.10,
-            "citability": 0.15, "content": 0.10, "entity": 0.10,
+            "readiness": 0.25, "technical": 0.12, "schema": 0.10,
+            "citability": 0.13, "content": 0.10, "brand": 0.10,
             "visibility": 0.15,
         }
         num = den = 0.0

@@ -20,7 +20,7 @@ import re
 from statistics import mean
 from urllib.parse import urlparse
 
-from .analyzers import citability, content, schema_ld, technical
+from .analyzers import brand, citability, content, schema_ld, technical
 from .crawl import Crawler, new_session, validate_url
 from .models import (
     CrawledPage,
@@ -131,16 +131,18 @@ async def audit(url: str, *, allow_local: bool = False, max_pages: int = 5) -> S
                     pages.append(p)
 
         # Page-level dimensions, run on every crawled page.
-        schema_scores, cite_scores, content_scores = [], [], []
+        schema_scores, cite_scores, content_scores, brand_scores = [], [], [], []
         page_findings: list[Finding] = []
         for p in pages:
             ss, sf = schema_ld.analyze(p)
             cs, cf = citability.analyze(p)
             cts, ctf = content.analyze(p)
+            bs, bf = brand.analyze(p)
             schema_scores.append(ss)
             cite_scores.append(cs)
             content_scores.append(cts)
-            page_findings.extend([*sf, *cf, *ctf])
+            brand_scores.append(bs)
+            page_findings.extend([*sf, *cf, *ctf, *bf])
 
     result.context = ctx
     result.pages_crawled = len(pages)
@@ -152,9 +154,12 @@ async def audit(url: str, *, allow_local: bool = False, max_pages: int = 5) -> S
     s_content = _average(content_scores, "content", "Content & E-E-A-T",
                          "Observed E-E-A-T signals: depth, authorship, freshness, references, "
                          "trust surface, alt coverage.")
+    s_brand = _average(brand_scores, "brand", "Brand Authority",
+                       "Third-party corroboration: social profiles, Wikipedia/Wikidata, "
+                       "reviews, directories.")
 
     readiness = _composite_readiness(s_tech, s_schema, s_cite)
-    result.scores = [readiness, s_tech, s_schema, s_cite, s_content]
+    result.scores = [readiness, s_tech, s_schema, s_cite, s_content, s_brand]
     result.findings = _dedupe_findings([*f_tech, *page_findings])
 
     result.finished_at = now_iso()
